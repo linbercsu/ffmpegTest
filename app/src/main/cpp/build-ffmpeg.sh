@@ -18,8 +18,6 @@ elif [ ${TARGET_ARCH} == "arm64" ]; then
   CXX=aarch64-linux-android21-clang++
   STRIP=aarch64-linux-android-strip
   CROSS_PREFIX=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android-
-#  RAN_LIB=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/aarch64-linux-android/bin/ranlib
-  RAN_LIB=
 elif [ ${TARGET_ARCH} == "x86" ]; then
   ARCH_DIR=x86
   CPU=atom
@@ -45,7 +43,7 @@ fi
 #ADDI_CFLAGS="-fPIE -pie -march=armv7-a -mfloat-abi=softfp -mfpu=neon"
 #EXTRA_CFLAGS="-mtune=atom -msse3 -mssse3 -mfpmath=sse"
 LAME_ROOT=$(pwd)/lame-build
-ADDI_CFLAGS="-Os -fpic -I ${LAME_ROOT} -mtune=atom -msse3 -mssse3 -mfpmath=sse"
+ADDI_CFLAGS="-Os -fpic -I ${LAME_ROOT}"
 ADDI_LDFLAGS="-L ${LAME_ROOT}/${ARCH_DIR}"
 SYSROOT=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
 TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
