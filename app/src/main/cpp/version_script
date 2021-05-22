@@ -1,0 +1,13 @@
+VERS_1.0
+{
+# Visible functions
+global:
+    JNI_OnLoad;
+    JNI_OnUnload;
+    Java_com_mx_myapplication_MainActivity_max;
+    Java_com_mx_myapplication_MainActivity_stringFromJNI;
+
+# Hide everything else
+local:
+    *;
+};
