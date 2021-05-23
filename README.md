@@ -1,5 +1,13 @@
 # Test app for ffmpeg on Android
 
+## Initialize
+
+```shell script
+git submodule init
+git submodule update
+
+```
+
 ## build
 
 `build ffmpeg libs`  
