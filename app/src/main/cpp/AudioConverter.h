@@ -10,20 +10,23 @@
 
 class OutputStream;
 class InputStream;
+class ProcessCallback;
 
 class AudioConverter {
 
 public:
     static void initClass(JNIEnv *pEnv, jclass pJclass);
 
-    AudioConverter(const char* sourcePath, const char* targetPath, const char* format);
+    AudioConverter(ProcessCallback* callback, const char* sourcePath, const char* targetPath, const char* format);
 
     ~AudioConverter() noexcept;
 
-    void convert();
+    const char* convert();
     void cancel();
 
 private:
+    static const char TAG[];
+
     std::unique_ptr<OutputStream> target;
     std::unique_ptr<InputStream> inputStream;
 };

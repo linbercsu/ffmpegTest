@@ -3,6 +3,7 @@
 //
 
 #include "AudioConverter.h"
+//#include "share/pch.h"
 
 extern "C" {
 #include <libswresample/swresample.h>
@@ -15,18 +16,65 @@ extern "C" {
 #include <string>
 #include <pthread.h>
 #include <mutex>
+#include <utility>
+
+//const char AudioConverter::TAG[] = PROJECTIZED( "AudioConverter" );
+const char AudioConverter::TAG[] = "AudioConverter";
+static jmethodID progressMethod = nullptr;
+
+class ProcessCallback {
+public:
+    virtual void onProgress(int progress) = 0;
+ };
+
+
+class JavaProgressCallback : public ProcessCallback {
+
+public:
+    static void init(JNIEnv *env, jclass clazz) {
+        progressMethod = env->GetMethodID(clazz, "onProgress", "(I)V");
+    }
+    explicit JavaProgressCallback(JNIEnv* env, jobject javaObject):
+            env(env) {
+        this->javaObject = env->NewGlobalRef(javaObject);
+    }
+
+
+    ~JavaProgressCallback() {
+        env->DeleteGlobalRef(javaObject);
+    }
+
+    void onProgress(int progress) override {
+        if (progress > 100)
+            progress = 100;
+        if (progress > lasProgress) {
+            lasProgress = progress;
+            env->CallVoidMethod(javaObject, progressMethod, progress);
+        }
+    }
+
+public:
+    JNIEnv* env;
+    jobject javaObject;
+    int lasProgress = 0;
+public:
+
+};
 
 class ConvertException : public std::exception {
 public:
+    explicit ConvertException(std::string  what): w(std::move(what)) {
+
+    }
     explicit ConvertException(const char* what): w(what) {
     }
 
     const char * what() const noexcept override {
-        return w;
+        return w.c_str();
     }
 
 private:
-    const char* w;
+    std::string w;
 };
 
 class InputStreamCallback {
@@ -39,13 +87,12 @@ public:
 class InputStream {
 
 public:
-    explicit InputStream(InputStreamCallback* callback, const char *path) : callback(callback)
+    explicit InputStream(ProcessCallback* processCallback, InputStreamCallback* callback, const char *path) : processCallback(processCallback),callback(callback)
     , sourcePath(path)
     ,lockMutex() {
     }
 
     ~InputStream() {
-        __android_log_write(6, "AudioConverter", "~InputStream");
         release();
     }
 
@@ -84,6 +131,8 @@ private:
     AVFrame *frame = nullptr;
     AVPacket *pkt = nullptr;
     int audio_frame_count = 0;
+    int64_t duration = 0;
+    std::unique_ptr<ProcessCallback> processCallback;
     bool stopped = false;
     std::mutex lockMutex;
 
@@ -97,12 +146,13 @@ private:
     }
 
     int decode_packet(AVCodecContext *dec, const AVPacket *package) {
-        int ret = 0;
+        int ret;
 
         // submit the packet to the decoder
         ret = avcodec_send_packet(dec, package);
         if (ret < 0) {
-            throw ConvertException("Error submitting a packet for decoding\n");
+
+            throw ConvertException(std::string("decode error: Error submitting a packet for decoding: ") + av_err2str(ret));
 //            fprintf(stderr, "Error submitting a packet for decoding (%s)\n", av_err2str(ret));
         }
 
@@ -115,7 +165,7 @@ private:
                 if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
                     return 0;
 
-                throw ConvertException("Error during decoding\n");
+                throw ConvertException(std::string("decode error: Error during decoding: ") + av_err2str(ret));
 //                fprintf(stderr, "Error during decoding (%s)\n", av_err2str(ret));
 //                return ret;
             }
@@ -132,7 +182,7 @@ private:
         return 0;
     }
 
-    void open_codec_context(int *stream_idx,
+    static void open_codec_context(int *stream_idx,
                            AVCodecContext **dec_ctx, AVFormatContext *formatContext,
                            enum AVMediaType type) {
         int ret, stream_index;
@@ -142,7 +192,7 @@ private:
 
         ret = av_find_best_stream(formatContext, type, -1, -1, nullptr, 0);
         if (ret < 0) {
-            throw ConvertException("Could not find stream in input file\n");
+            throw ConvertException("audio stream not found.");
 //            fprintf(stderr, "Could not find %s stream in input file '%s'\n",
 //                    av_get_media_type_string(type), src_filename);
 //            return ret;
@@ -155,7 +205,7 @@ private:
             if (!dec) {
 //                fprintf(stderr, "Failed to find %s codec\n",
 //                        av_get_media_type_string(type));
-                throw ConvertException("Failed to find codec\n");
+                throw ConvertException("decode error: Failed to find codec");
 //                return AVERROR(EINVAL);
             }
 
@@ -164,23 +214,23 @@ private:
             if (!*dec_ctx) {
 //                fprintf(stderr, "Failed to allocate the %s codec context\n",
 //                        av_get_media_type_string(type));
-                throw ConvertException("Failed to allocated the codec context\n");
+                throw ConvertException("decode error: Failed to allocated the codec context");
 //                return AVERROR(ENOMEM);
             }
 
             /* Copy codec parameters from input stream to output codec context */
-            if ((avcodec_parameters_to_context(*dec_ctx, st->codecpar)) < 0) {
+            if ((ret = (avcodec_parameters_to_context(*dec_ctx, st->codecpar))) < 0) {
 //                fprintf(stderr, "Failed to copy %s codec parameters to decoder context\n",
 //                        av_get_media_type_string(type));
-                throw ConvertException("Failed to copy codec parameters\n");
+                throw ConvertException(std::string("decode error: Failed to copy codec parameters: ") + av_err2str(ret));
 //                return ret;
             }
 
             /* Init the decoders */
-            if ((avcodec_open2(*dec_ctx, dec, &opts)) < 0) {
+            if ((ret = (avcodec_open2(*dec_ctx, dec, &opts))) < 0) {
 //                fprintf(stderr, "Failed to open %s codec\n",
 //                        av_get_media_type_string(type));
-                throw ConvertException("Failed to open codec\n");
+                throw ConvertException(std::string("decode error: Failed to open codec") + av_err2str(ret));
 //                return ret;
             }
             *stream_idx = stream_index;
@@ -188,6 +238,7 @@ private:
 
     }
 
+    /*
     int get_format_from_sample_fmt(const char **fmt,
                                    enum AVSampleFormat sample_fmt) {
         int i;
@@ -217,6 +268,7 @@ private:
 //        return -1;
         throw ConvertException("sample format %s is not supported as output format\n");
     }
+     */
 
 public:
     void stop() {
@@ -228,24 +280,26 @@ public:
 
     }
     void init() {
-        src_filename = sourcePath;
-
+        src_filename = sourcePath.c_str();
+        int ret;
         /* open input file, and allocate format context */
-        if (avformat_open_input(&fmt_ctx, src_filename, nullptr, nullptr) < 0) {
+        if ((ret = avformat_open_input(&fmt_ctx, src_filename, nullptr, nullptr)) < 0) {
 //            fprintf(stderr, "Could not open source file %s\n", src_filename);
 //            exit(1);
-            throw ConvertException("Could not open source file\n");
+            throw ConvertException(std::string("open source: file failed: ") + av_err2str(ret));
         }
 
         /* retrieve stream information */
-        if (avformat_find_stream_info(fmt_ctx, nullptr) < 0) {
+        if ((ret = avformat_find_stream_info(fmt_ctx, nullptr)) < 0) {
 //            fprintf(stderr, "Could not find stream information\n");
 //            exit(1);
-            throw ConvertException("Could not find stream information\n");
+            throw ConvertException(std::string("open source: Could not find stream information") + av_err2str(ret));
         }
-
+ 
         open_codec_context(&audio_stream_idx, &audio_dec_ctx, fmt_ctx, AVMEDIA_TYPE_AUDIO);
         audio_stream = fmt_ctx->streams[audio_stream_idx];
+        
+        duration = audio_stream->duration; 
 
         /* dump input information to stderr */
 //        av_dump_format(fmt_ctx, 0, src_filename, 0);
@@ -254,14 +308,14 @@ public:
         if (!frame) {
 //            fprintf(stderr, "Could not allocate frame\n");
 //            AVERROR(ENOMEM);
-            throw ConvertException("Could not allocate frame\n");
+            throw ConvertException("memory error: Could not allocate frame");
         }
 
         pkt = av_packet_alloc();
         if (!pkt) {
 //            fprintf(stderr, "Could not allocate packet\n");
 //            ret = AVERROR(ENOMEM);
-            throw ConvertException("Could not allocate packet\n");
+            throw ConvertException("memory error: Could not allocate packet");
         }
 
         callback->onAudioStream(audio_dec_ctx);
@@ -280,11 +334,22 @@ public:
 //            if (pkt->stream_index == video_stream_idx)
 //                ret = decode_packet(video_dec_ctx, pkt);
 //            else if (pkt->stream_index == audio_stream_idx)
-            if (pkt->stream_index == audio_stream_idx)
+            if (pkt->stream_index == audio_stream_idx) {
                 ret = decode_packet(audio_dec_ctx, pkt);
+
+                if (ret >= 0) {
+                    int progress = pkt->pts * 100 / duration;
+                    processCallback->onProgress(progress);
+                }
+            }
             av_packet_unref(pkt);
             if (ret < 0)
                 break;
+
+        }
+
+        if (isStopped()) {
+            throw ConvertException("cancelled");
         }
 
         /* flush the decoders */
@@ -295,22 +360,22 @@ public:
 
 //        printf("Demuxing succeeded.\n");
 
-        if (audio_stream) {
-            enum AVSampleFormat sfmt = audio_dec_ctx->sample_fmt;
+//        if (audio_stream) {
+//            enum AVSampleFormat sfmt = audio_dec_ctx->sample_fmt;
 
 //            __android_log_print(6, "AudioConverter", "audio %d, %d, %d, %d", audio_dec_ctx->sample_fmt, audio_dec_ctx->sample_rate, audio_dec_ctx->channels, audio_dec_ctx->channel_layout);
-            int n_channels = audio_dec_ctx->channels;
-            const char *fmt;
+//            int n_channels = audio_dec_ctx->channels;
+//            const char *fmt;
 
-            if (av_sample_fmt_is_planar(sfmt)) {
-                const char *packed = av_get_sample_fmt_name(sfmt);
-                __android_log_print(6, "AudioConverter", "planar %s", packed);
+//            if (av_sample_fmt_is_planar(sfmt)) {
+//                const char *packed = av_get_sample_fmt_name(sfmt);
+//                __android_log_print(6, "AudioConverter", "planar %s", packed);
 //                printf("Warning: the sample format the decoder produced is planar "
 //                       "(%s). This example will output the first channel only.\n",
 //                       packed ? packed : "?");
 //                sfmt = av_get_packed_sample_fmt(sfmt);
-                n_channels = 1;
-            }
+//                n_channels = 1;
+//            }
 
 //            ret = get_format_from_sample_fmt(&fmt, sfmt);
 
@@ -318,7 +383,7 @@ public:
 //                   "ffplay -f %s -ac %d -ar %d %s\n",
 //                   fmt, n_channels, audio_dec_ctx->sample_rate,
 //                   audio_dst_filename);
-        }
+//        }
 
         callback->onEnd();
 
@@ -326,7 +391,7 @@ public:
     }
 
 private:
-    const char *sourcePath;
+    std::string sourcePath;
 };
 
 class OutputStream : public InputStreamCallback {
@@ -337,15 +402,13 @@ public:
     }
 
     ~OutputStream() {
-        __android_log_write(6, "AudioConverter", "~OutputStream");
+//        __android_log_write(6, "AudioConverter", "~OutputStream");
         if (codecContext != nullptr)
             avcodec_free_context(&codecContext);
 
         if (frame != nullptr)
             av_frame_free(&frame);
 
-        if (tmp_frame != nullptr)
-            av_frame_free(&tmp_frame);
 //    sws_freeContext(sws_ctx);
         if (swr_ctx != nullptr)
             swr_free(&swr_ctx);
@@ -363,8 +426,8 @@ public:
     
 
 private:
-    const char* targetPath;
-    const char* format;
+    std::string targetPath;
+    std::string format;
 
     AVFormatContext *context{};
     AVStream *stream{};
@@ -374,8 +437,6 @@ private:
     struct SwrContext *swr_ctx{};
     int samples_count{};
     int64_t next_pts{};
-    AVFrame *tmp_frame{};
-    float t{}, tincr{}, tincr2{};
 
     int sourceSample_rate = 0;
     uint64_t sourceLayout = 0;
@@ -383,10 +444,10 @@ private:
     AVSampleFormat sourceSampleFormat = AV_SAMPLE_FMT_NONE;
 public:
     void init() {
-        int ret = 0;
-        ret = avformat_alloc_output_context2(&context, nullptr, format, targetPath);
+        int ret;
+        ret = avformat_alloc_output_context2(&context, nullptr, format.c_str(), targetPath.c_str());
         if (ret < 0) {
-            throw ConvertException("can't alloc output");
+            throw ConvertException(std::string("create target: can't alloc output") + av_err2str(ret));
         }
 
         add_stream(context->oformat->audio_codec);
@@ -395,16 +456,16 @@ public:
         open_audio(opt);
 
         if (!(context->oformat->flags & AVFMT_NOFILE)) {
-            ret = avio_open(&context->pb, targetPath, AVIO_FLAG_WRITE);
+            ret = avio_open(&context->pb, targetPath.c_str(), AVIO_FLAG_WRITE);
             if (ret < 0) {
-                throw ConvertException("can't open avio\n");
+                throw ConvertException(std::string("create target: can't open avio:") + av_err2str(ret));
             }
         }
         /* Write the stream header, if any. */
 
         ret = avformat_write_header(context, &opt);
         if (ret < 0)
-            throw ConvertException("can't write header\n");
+            throw ConvertException(std::string("create target: can't write header") + av_err2str(ret));
     }
 
     void end() {
@@ -412,7 +473,6 @@ public:
 
         avcodec_free_context(&codecContext);
         av_frame_free(&frame);
-        av_frame_free(&tmp_frame);
 //    sws_freeContext(sws_ctx);
         swr_free(&swr_ctx);
 
@@ -427,28 +487,27 @@ public:
         context = nullptr;
         codecContext = nullptr;
         frame = nullptr;
-        tmp_frame = nullptr;
         swr_ctx = nullptr;
     }
 
     /* Add an output stream. */
     void add_stream(enum AVCodecID codec_id) {
-        __android_log_print(6, "AudioConverter", "add audio %d", codec_id);
+//        __android_log_print(4, TAG, "add audio %d", codec_id);
         int i;
         /* find the encoder */
         encoder = avcodec_find_encoder(codec_id);
         if (!encoder) {
-            throw ConvertException("can't find encoder");
+            throw ConvertException("encode error: can't find encoder");
         }
 
         stream = avformat_new_stream(context, nullptr);
         if (!stream) {
-            throw ConvertException("can't new stream");
+            throw ConvertException("encode error: can't new stream");
         }
-        stream->id = context->nb_streams - 1;
+        stream->id = (int)(context->nb_streams - 1);
         codecContext = avcodec_alloc_context3(encoder);
         if (!codecContext) {
-            throw ConvertException("can't alloc context3");
+            throw ConvertException("encode error: can't alloc context3");
         }
         switch ((encoder)->type) {
             case AVMEDIA_TYPE_AUDIO:
@@ -506,7 +565,7 @@ public:
     }
 
     void open_audio(AVDictionary *opt_arg) {
-        AVFormatContext *oc = context;
+//        AVFormatContext *oc = context;
         AVCodec *codec = encoder;
         AVCodecContext *c;
         OutputStream *ost = this;
@@ -523,14 +582,14 @@ public:
         if (ret < 0) {
 //        fprintf(stderr, "Could not open audio codec: %s\n", av_err2str(ret));
 //        exit(1);
-            throw ConvertException("Could not open audio codec\n");
+            throw ConvertException(std::string("encode error: Could not open audio codec: ") + av_err2str(ret));
         }
 
         /* init signal generator */
-        ost->t = 0;
-        ost->tincr = 2 * M_PI * 110.0 / c->sample_rate;
-        /* increment frequency by 110 Hz per second */
-        ost->tincr2 = 2 * M_PI * 110.0 / c->sample_rate / c->sample_rate;
+//        ost->t = 0;
+//        ost->tincr = 2 * M_PI * 110.0 / c->sample_rate;
+//        /* increment frequency by 110 Hz per second */
+//        ost->tincr2 = 2 * M_PI * 110.0 / c->sample_rate / c->sample_rate;
 
         if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
             nb_samples = 10000;
@@ -543,21 +602,19 @@ public:
 
         ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
                                        c->sample_rate, nb_samples);
-        ost->tmp_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, c->channel_layout,
-                                           c->sample_rate, nb_samples);
 
         /* copy the stream parameters to the muxer */
         ret = avcodec_parameters_from_context(ost->stream->codecpar, c);
         if (ret < 0) {
 //        fprintf(stderr, "Could not copy the stream parameters\n");
 //        exit(1);
-            throw ConvertException("Could not copy the stream parameters\n");
+            throw ConvertException(std::string("encode error: Could not copy the stream parameters: ") + av_err2str(ret));
         }
 
         /* create resampler context */
         ost->swr_ctx = swr_alloc();
         if (!ost->swr_ctx) {
-            throw ConvertException("Could not allocate resampler context\n");
+            throw ConvertException("encode error: Could not allocate resampler context");
 //        fprintf(stderr, "Could not allocate resampler context\n");
 //        exit(1);
         }
@@ -573,14 +630,14 @@ public:
         av_opt_set_sample_fmt(ost->swr_ctx, "out_sample_fmt", c->sample_fmt, 0);
 
         /* initialize the resampling context */
-        if ((swr_init(ost->swr_ctx)) < 0) {
-            throw ConvertException("Failed to initialize the resampling context\n");
+        if ((ret = (swr_init(ost->swr_ctx))) < 0) {
+            throw ConvertException(std::string("encode error: Failed to initialize the resampling context: ") + av_err2str(ret));
 //        fprintf(stderr, "Failed to initialize the resampling context\n");
 //        exit(1);
         }
     }
 
-    AVFrame* alloc_audio_frame(enum AVSampleFormat sample_fmt,
+    static AVFrame* alloc_audio_frame(enum AVSampleFormat sample_fmt,
                                                uint64_t channel_layout,
                                                int sample_rate, int nb_samples) {
         AVFrame *frame = av_frame_alloc();
@@ -589,7 +646,7 @@ public:
         if (!frame) {
 //        fprintf(stderr, "Error allocating an audio frame\n");
 //        exit(1);
-            throw ConvertException("Error allocating an audio frame\n");
+            throw ConvertException("memory error: Error allocating an audio frame");
         }
 
         frame->format = sample_fmt;
@@ -602,7 +659,7 @@ public:
             if (ret < 0) {
 //            fprintf(stderr, "Error allocating an audio buffer\n");
 //            exit(1);
-                throw ConvertException("Error allocating an audio buffer\n");
+                throw ConvertException("memory error: Error allocating an audio buffer");
             }
         }
 
@@ -641,7 +698,7 @@ public:
              */
             ret = av_frame_make_writable(frame);
             if (ret < 0)
-                throw ConvertException("av_frame_make_writable error");
+                throw ConvertException(std::string("encode error: av_frame_make_writable error: ") + av_err2str(ret));
 //            exit(1);
 
             /* convert to destination format */
@@ -649,7 +706,7 @@ public:
                               frame->data, dst_nb_samples,
                               (const uint8_t **) audioFrame->data, audioFrame->nb_samples);
             if (ret < 0) {
-                throw ConvertException("swr_convert error");
+                throw ConvertException(std::string("encode error: swr_convert error: ") + av_err2str(ret));
 //            fprintf(stderr, "Error while converting\n");
 //            exit(1);
             }
@@ -666,23 +723,23 @@ public:
         write_frame(audioFrame);
     }
 
-    void write_frame(AVFrame *frame) {
+    void write_frame(AVFrame *pFrame) {
         AVFormatContext *fmt_ctx = context;
         AVCodecContext *c = codecContext;
         AVStream *st = stream;
         int ret;
 
         // send the frame to the encoder
-        ret = avcodec_send_frame(c, frame);
+        ret = avcodec_send_frame(c, pFrame);
         if (ret < 0) {
 //            fprintf(stderr, "Error sending a frame to the encoder: %s\n",
 //                    av_err2str(ret));
 //            exit(1);
-            throw ConvertException("Error sending a frame to the encoder\n");
+            throw ConvertException(std::string("encode error: Error sending a frame to the encoder: ") + av_err2str(ret));
         }
 
         while (ret >= 0) {
-            AVPacket pkt = {0};
+            AVPacket pkt = {nullptr};
 
             ret = avcodec_receive_packet(c, &pkt);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
@@ -690,7 +747,7 @@ public:
             else if (ret < 0) {
 //            fprintf(stderr, "Error encoding a frame: %s\n", av_err2str(ret));
 //            exit(1);
-                throw ConvertException("Error encoding a frame \n");
+                throw ConvertException(std::string("encode error: Error encoding a frame: ") + av_err2str(ret));
             }
 
             /* rescale output packet timestamp values from codec to stream timebase */
@@ -702,7 +759,7 @@ public:
             ret = av_interleaved_write_frame(fmt_ctx, &pkt);
             av_packet_unref(&pkt);
             if (ret < 0) {
-                throw ConvertException("av_interleaved_write_frame\n");
+                throw ConvertException(std::string("encode error: av_interleaved_write_frame: ") + av_err2str(ret));
 //            fprintf(stderr, "Error while writing output packet: %s\n", av_err2str(ret));
 //            exit(1);
             }
@@ -729,29 +786,32 @@ public:
 
 };
 
-AudioConverter::AudioConverter(const char *sourcePath, const char *targetPath, const char *format)
+AudioConverter::AudioConverter(ProcessCallback* callback, const char *sourcePath, const char *targetPath, const char *format)
         : target(new OutputStream(targetPath, format)),
-          inputStream(new InputStream(target.get(), sourcePath)) {
+        inputStream(new InputStream(callback, target.get(), sourcePath)) {
 
 }
 
-AudioConverter::~AudioConverter() noexcept {
-}
+AudioConverter::~AudioConverter() noexcept = default;
 
-void AudioConverter::convert() {
+const char* AudioConverter::convert() {
     try {
         inputStream->init();
         inputStream->start();
 //        inputStream.reset();
 //        target.reset();
     } catch (std::exception& e) {
-        __android_log_write(6, "AudioConverter", e.what());
+//        __android_log_write(6, "AudioConverter", e.what());
+        return e.what();
     }
+
+    return nullptr;
 }
 
 void AudioConverter::cancel() {
     inputStream->stop();
 }
+
 
 //////////////jni
 
@@ -763,24 +823,34 @@ static jlong nativeInit(JNIEnv* env,
     const char *targetPath = env->GetStringUTFChars(target, &copy);
     const char *formatUTF = env->GetStringUTFChars(format, &copy);
 
-    auto* converter = new AudioConverter(sourcePath, targetPath, formatUTF);
+    auto* progressCallback = new JavaProgressCallback(env, thzz);
+    auto* converter = new AudioConverter(progressCallback, sourcePath, targetPath, formatUTF);
+
+    env->ReleaseStringUTFChars(source, sourcePath);
+    env->ReleaseStringUTFChars(target, targetPath);
+    env->ReleaseStringUTFChars(format, formatUTF);
+
     return jlong(converter);
 }
 
-static void nativeConvert(JNIEnv* env,
-                          jobject  thzz, jlong ptr) {
+static jstring nativeConvert(JNIEnv* env,
+                          jobject  /*thzz*/, jlong ptr) {
     auto* converter = reinterpret_cast<AudioConverter*>(ptr);
-    converter->convert();
+    const char* error = converter->convert();
+    if (error == nullptr)
+        return nullptr;
+
+    return env->NewStringUTF(error);
 }
 
-static void nativeStop(JNIEnv* env,
-                       jobject  thzz, jlong ptr) {
+static void nativeStop(JNIEnv* /*env*/,
+                       jobject  /*thzz*/, jlong ptr) {
     auto* converter = reinterpret_cast<AudioConverter*>(ptr);
     converter->cancel();
 }
 
-static void nativeRelease(JNIEnv* env,
-                       jobject  thzz, jlong ptr) {
+static void nativeRelease(JNIEnv* /*env*/,
+                       jobject  /*thzz*/, jlong ptr) {
     auto* converter = reinterpret_cast<AudioConverter*>(ptr);
     delete converter;
 }
@@ -789,13 +859,15 @@ static void nativeRelease(JNIEnv* env,
 static const JNINativeMethod methods[] =
         {
                 { "nativeInit",         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)J", ( void* )nativeInit     },
-                { "nativeConvert",               "(J)V",     ( void* )nativeConvert           },
+                { "nativeConvert",               "(J)Ljava/lang/String;",     ( void* )nativeConvert           },
                 { "nativeStop",            "(J)V",                             ( void* )nativeStop        },
                 { "nativeRelease",            "(J)V",                             ( void* )nativeRelease        },
         };
 
 void AudioConverter::initClass(JNIEnv *env, jclass clazz) {
     env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
+    JavaProgressCallback::init(env, clazz);
+//    JavaProgressCallback::progressMethod = env->GetMethodID(clazz, "onProgress", "(I)V");
 //    if ( env->ExceptionCheck() )
 //    {
 //        _env->ExceptionDescribe();
@@ -803,7 +875,7 @@ void AudioConverter::initClass(JNIEnv *env, jclass clazz) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_mx_myapplication_AudioConverter_nativeInitClass(
+Java_com_mxtech_audio_AudioConverter_nativeInitClass(
         JNIEnv* env,
         jclass clazz) {
     AudioConverter::initClass(env, clazz);

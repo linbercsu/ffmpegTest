@@ -7,10 +7,11 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.widget.TextView
+import com.mxtech.audio.AsyncAudioConverter
 
 class MainActivity : AppCompatActivity() {
 
-    private var audioConverter: Converter? = null;
+    private lateinit var audioConverter: AsyncAudioConverter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -21,17 +22,20 @@ class MainActivity : AppCompatActivity() {
 //        textView.text = stringFromJNI()
 //        Log.e("test", "test: max: ${max()}")
 
+            audioConverter = AsyncAudioConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big.mp3", "mp3") {
 
-        audioConverter = Converter()
-        audioConverter?.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+
+            }
+
+        audioConverter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
 
         textView.setOnClickListener {
-            audioConverter?.stop()
+            audioConverter.stop()
         }
     }
 
     override fun onStop() {
-        audioConverter?.stop()
+        audioConverter.stop()
         super.onStop()
     }
 
@@ -51,41 +55,6 @@ class MainActivity : AppCompatActivity() {
 
         fun start(activity: Activity) {
             activity.startActivity(Intent(activity, MainActivity::class.java));
-        }
-    }
-
-    class Converter : AsyncTask<Void, Void, Boolean>() {
-        private var audioConverter: AudioConverter? = null
-        override fun doInBackground(vararg params: Void?): Boolean {
-            synchronized(this) {
-                if (isCancelled)
-                    return false
-
-                audioConverter = AudioConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big.mp3", "mp3")
-            }
-            audioConverter?.convert()
-            synchronized(this) {
-                audioConverter?.release()
-                audioConverter = null
-            }
-            return true
-        }
-
-        fun stop() {
-            synchronized(this) {
-                cancel(false)
-                audioConverter?.stop()
-            }
-        }
-
-        override fun onCancelled() {
-            super.onCancelled()
-            Log.e("test", "convert cancel")
-        }
-
-        override fun onPostExecute(result: Boolean?) {
-
-            Log.e("test", "convert finish")
         }
     }
 }
