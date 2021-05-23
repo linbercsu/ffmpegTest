@@ -33,14 +33,13 @@ endif()
 
 set(
         third-libs
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavfilter.so
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavcodec.so
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libpostproc.so
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavformat.so
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswresample.so
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswscale.so
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavutil.so
-
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavfilter.a
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavformat.a
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavcodec.a
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavutil.a
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswresample.a
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswscale.a
+        ${CMAKE_SOURCE_DIR}/lame-build/${ANDROID_ABI}/libmp3lame.a
 )
 
 
@@ -77,6 +76,8 @@ find_library( # Sets the name of the path variable.
               # you want CMake to locate.
               log )
 
+find_library( z-lib z)
+
 string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
 if(build_type MATCHES "^rel")
     set_target_properties(native-lib PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -93,5 +94,6 @@ target_link_libraries( # Specifies the target library.
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib}
+                       ${z-lib}
 
         )

@@ -10,8 +10,8 @@ else ifeq ($(TARGET_ARCH),x86_64)
     ARCH_DIR=x86_64
 endif
 
-LOCAL_PATH=${MY_DIR}/../obj/local/${ARCH_DIR}
 include $(CLEAR_VARS)
+LOCAL_PATH=${MY_DIR}/../obj/local/${ARCH_DIR}
 
 LOCAL_MODULE    := mp3lame
 LOCAL_SRC_FILES := libmp3lame.a
@@ -58,13 +58,13 @@ libavutil.a
 
 include $(PREBUILT_STATIC_LIBRARY)
 
-include $(CLEAR_VARS)
+#include $(CLEAR_VARS)
 
-LOCAL_MODULE    := postproc
-LOCAL_SRC_FILES := \
-libpostproc.a
-
-include $(PREBUILT_STATIC_LIBRARY)
+# LOCAL_MODULE    := postproc
+# LOCAL_SRC_FILES := \
+# libpostproc.a
+#
+# include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 
@@ -83,12 +83,23 @@ libswscale.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := app
+LOCAL_PATH=${MY_DIR}
+LOCAL_SRC_FILES := \
+
+#ffmpeg.refs.c
+
+
+LOCAL_MODULE := ffmpeg-mix
+
 
 NDK_APP_DST_DIR=${MY_DIR}/../jniLibs/${ARCH_DIR}
 
-LOCAL_SRC_FILES := \
+LOCAL_LDLIBS := \
+-Wl,--version-script=$(LOCAL_PATH)/version_scripts/ffmpeg \
+-lz
 
-
-LOCAL_STATIC_LIBRARIES := mp3lame avdevice avcodec avformat avfilter avutil postproc swresample swscale
+LOCAL_STATIC_LIBRARIES := mp3lame avfilter avformat avcodec avutil swresample swscale
+# LOCAL_STATIC_LIBRARIES := mp3lame avformat swresample swscale  avcodec avutil avfilter
+# LOCAL_STATIC_LIBRARIES := avformat mp3lame avdevice avcodec avfilter avutil postproc swresample swscale
+# LOCAL_WHOLE_STATIC_LIBRARIES := mp3lame avdevice avcodec avformat avfilter avutil postproc swresample swscale
 include $(BUILD_SHARED_LIBRARY)

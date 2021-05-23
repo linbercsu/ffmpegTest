@@ -6,6 +6,7 @@ global:
     JNI_OnUnload;
     Java_com_mx_myapplication_MainActivity_max;
     Java_com_mx_myapplication_MainActivity_stringFromJNI;
+    Java_com_mx_myapplication_AudioConverter_nativeInitClass;
 
 # Hide everything else
 local:

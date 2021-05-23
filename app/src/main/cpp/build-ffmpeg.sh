@@ -2,7 +2,13 @@
 
 TARGET_ARCH=$1
 
-if [ ${TARGET_ARCH} == "arm" ]; then
+if test -z ${TARGET_ARCH}
+then
+    echo "flavor in [neon arm64 x84 x86_64] using default arm64"
+    TARGET_ARCH=arm64
+fi
+
+if [ "${TARGET_ARCH}" == "arm" ]; then
   ARCH_DIR=armeabi-v7a
   CPU=armv7-a
   ARCH=arm
@@ -10,7 +16,7 @@ if [ ${TARGET_ARCH} == "arm" ]; then
   CXX=armv7a-linux-androideabi21-clang++
   STRIP=arm-linux-androideabi-strip
   CROSS_PREFIX=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/arm-linux-androideabi-
-elif [ ${TARGET_ARCH} == "arm64" ]; then
+elif [ "${TARGET_ARCH}" == "arm64" ]; then
   ARCH_DIR=arm64-v8a
   CPU=armv8-a
   ARCH=aarch64
@@ -18,7 +24,8 @@ elif [ ${TARGET_ARCH} == "arm64" ]; then
   CXX=aarch64-linux-android21-clang++
   STRIP=aarch64-linux-android-strip
   CROSS_PREFIX=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android-
-elif [ ${TARGET_ARCH} == "x86" ]; then
+  EXTRA_CFLAGS+=" -fstack-protector -fstrict-aliasing"
+elif [ "${TARGET_ARCH}" == "x86" ]; then
   ARCH_DIR=x86
   CPU=atom
   ARCH=x86
@@ -26,7 +33,7 @@ elif [ ${TARGET_ARCH} == "x86" ]; then
   CXX=i686-linux-android21-clang++
   STRIP=i686-linux-android-strip
   CROSS_PREFIX=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/i686-linux-android-
-elif [ ${TARGET_ARCH} == "x86_64" ]; then
+elif [ "${TARGET_ARCH}" == "x86_64" ]; then
   ARCH_DIR=x86_64
   CPU=atom
   ARCH=x86_64
@@ -43,7 +50,10 @@ fi
 #ADDI_CFLAGS="-fPIE -pie -march=armv7-a -mfloat-abi=softfp -mfpu=neon"
 #EXTRA_CFLAGS="-mtune=atom -msse3 -mssse3 -mfpmath=sse"
 LAME_ROOT=$(pwd)/lame-build
-ADDI_CFLAGS="-Os -fpic -I ${LAME_ROOT}"
+EXTRA_CFLAGS+=" -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function"
+EXTRA_CFLAGS+=" -I ${LAME_ROOT} -ftree-vectorize -ffunction-sections -funwind-tables -fomit-frame-pointer -no-canonical-prefixes -pipe"
+
+#ADDI_CFLAGS="-O2 -fpic -I ${LAME_ROOT}-ftree-vectorize -ffunction-sections -funwind-tables -fomit-frame-pointer -no-canonical-prefixes -pipe"
 ADDI_LDFLAGS="-L ${LAME_ROOT}/${ARCH_DIR}"
 SYSROOT=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
 TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
@@ -63,13 +73,14 @@ configure() {
     --cc=$TOOLCHAIN/${CC} \
     --cxx=$TOOLCHAIN/${CXX} \
     --strip=$TOOLCHAIN/${STRIP} \
-    --extra-cflags="$ADDI_CFLAGS" \
+    --extra-cflags="$EXTRA_CFLAGS" \
     --extra-ldflags="$ADDI_LDFLAGS" \
     --disable-doc \
     --disable-ffmpeg \
     --disable-ffplay \
     --disable-network \
     --disable-symver \
+    --disable-postproc \
     --enable-shared \
     --enable-static \
     --disable-ffprobe \
