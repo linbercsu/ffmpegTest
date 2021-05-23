@@ -1,6 +1,6 @@
 #!/bin/bash
 
- clean
+# clean
 rm -rf ffmpeg-build/
 rm -rf lame-build/
 rm -rf ../jniLibs/

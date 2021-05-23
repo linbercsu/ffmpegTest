@@ -1,0 +1,3 @@
+[submodule "app/src/main/cpp/ffmpeg"]
+	path = app/src/main/cpp/ffmpeg
+	url = https://git.ffmpeg.org/ffmpeg.git
