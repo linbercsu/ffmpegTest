@@ -19,6 +19,7 @@ extern "C" {
 #include <mutex>
 #include <utility>
 
+extern AVCodec ff_android_hw_h264_encoder;
 #define SCALE_FLAGS SWS_BICUBIC
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
 //const char AudioConverter::TAG[] = PROJECTIZED( "AudioConverter" );
@@ -160,8 +161,8 @@ private:
         callback->onAudioFrame(audioFrame);
     }
 
-    void output_video_frame(AVFrame *videoFrame) {
-        callback->onVideoFrame(videoFrame);
+    void output_video_frame(AVFrame *pFrame) {
+        callback->onVideoFrame(pFrame);
     }
 
     int decode_packet(AVCodecContext *dec, const AVPacket *package) {
@@ -451,10 +452,18 @@ public:
         if (frame != nullptr)
             av_frame_free(&frame);
 
-//        if (sws_ctx != nullptr) {
-//            sws_freeContext(sws_ctx);
-//            sws_ctx = nullptr;
-//        }
+        if (frame1 != nullptr) {
+            av_frame_free(&frame1);
+        }
+
+        if (frameWrite != nullptr) {
+            av_frame_free(&frameWrite);
+        }
+
+        if (sws_ctx != nullptr) {
+            sws_freeContext(sws_ctx);
+            sws_ctx = nullptr;
+        }
         if (swr_ctx != nullptr)
             swr_free(&swr_ctx);
 
@@ -500,11 +509,14 @@ private:
     AVFrame *tmpVideoFrame{};
     AVSampleFormat sourceSampleFormat = AV_SAMPLE_FMT_NONE;
     struct SwsContext *sws_ctx{};
-    int64_t next_ptsVideo{};
+    int64_t next_ptsVideo{0};
     int sourceWidth = 0;
     int sourceHeight = 0;
     const char* sourceRotate = nullptr;
 public:
+    /*
+     * useless
+     */
     void init() {
         int ret;
         ret = avformat_alloc_output_context2(&context, nullptr, format.c_str(), targetPath.c_str());
@@ -540,7 +552,9 @@ public:
 
     void addVideo(AVCodecContext *sourceCodecContext) {
         __android_log_print(6, "AudioConverter", "addVideo");
-        context->oformat->video_codec = AV_CODEC_ID_MPEG4;
+        if (context->oformat->video_codec == AV_CODEC_ID_MPEG4) {
+            context->oformat->video_codec = AV_CODEC_ID_H264;
+        }
         add_stream(context->oformat->video_codec, false);
         AVDictionary *opt = nullptr;
         open_video(opt);
@@ -559,24 +573,29 @@ public:
 
 
         if (!(context->oformat->flags & AVFMT_NOFILE))
-            /* Close the output file. */
             avio_closep(&context->pb);
 
-        /* free the stream */
         avformat_free_context(context);
 
         context = nullptr;
         codecContext = nullptr;
         frame = nullptr;
         swr_ctx = nullptr;
+        sws_ctx = nullptr;
     }
 
     /* Add an output stream. */
     void add_stream(enum AVCodecID codec_id, bool audio) {
         __android_log_print(6, "AudioConverter", "add stream %d", codec_id);
         int i;
+        AVCodec* enc;
         /* find the encoder */
-        AVCodec* enc = avcodec_find_encoder(codec_id);
+        if (codec_id == AV_CODEC_ID_H264) {
+            enc = &ff_android_hw_h264_encoder;
+        } else {
+            enc = avcodec_find_encoder(codec_id);
+        }
+
         if (!enc) {
             throw ConvertException("encode error: can't find encoder");
         }
@@ -605,22 +624,6 @@ public:
                 codecContext->sample_fmt = encoder->sample_fmts ?
                                                    encoder->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
                 codecContext->bit_rate = 64000;
-
-
-/*
-                codecContext->sample_rate = 44100;
-
-                codecContext->channel_layout = AV_CH_LAYOUT_MONO;
-                if (encoder->channel_layouts) {
-                    codecContext->channel_layout = encoder->channel_layouts[0];
-                    for (i = 0; encoder->channel_layouts[i]; i++) {
-                        if (encoder->channel_layouts[i] == AV_CH_LAYOUT_MONO)
-                            codecContext->channel_layout = AV_CH_LAYOUT_MONO;
-                    }
-                }
-
-*/
-
 
                 codecContext->sample_rate = 44100;
                 if (encoder->supported_samplerates) {
@@ -651,7 +654,7 @@ public:
                 videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
                 videoCodecContext->codec_id = codec_id;
 
-                videoCodecContext->bit_rate = 400000;
+                videoCodecContext->bit_rate = 4000000;
                 /* Resolution must be a multiple of two. */
 //                videoCodecContext->width    = 352;
 //                videoCodecContext->height   = 288;
@@ -692,7 +695,7 @@ public:
         }
         /* Some formats want stream headers to be separate. */
         if (context->oformat->flags & AVFMT_GLOBALHEADER)
-            codecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
     void open_audio(AVDictionary *opt_arg) {
@@ -711,16 +714,8 @@ public:
         ret = avcodec_open2(c, codec, &opt);
         av_dict_free(&opt);
         if (ret < 0) {
-//        fprintf(stderr, "Could not open audio codec: %s\n", av_err2str(ret));
-//        exit(1);
             throw ConvertException(std::string("encode error: Could not open audio codec: ") + av_err2str(ret));
         }
-
-        /* init signal generator */
-//        ost->t = 0;
-//        ost->tincr = 2 * M_PI * 110.0 / c->sample_rate;
-//        /* increment frequency by 110 Hz per second */
-//        ost->tincr2 = 2 * M_PI * 110.0 / c->sample_rate / c->sample_rate;
 
         if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
             nb_samples = 10000;
@@ -743,8 +738,6 @@ public:
         /* copy the stream parameters to the muxer */
         ret = avcodec_parameters_from_context(ost->stream->codecpar, c);
         if (ret < 0) {
-//        fprintf(stderr, "Could not copy the stream parameters\n");
-//        exit(1);
             throw ConvertException(std::string("encode error: Could not copy the stream parameters: ") + av_err2str(ret));
         }
 
@@ -752,8 +745,6 @@ public:
         ost->swr_ctx = swr_alloc();
         if (!ost->swr_ctx) {
             throw ConvertException("encode error: Could not allocate resampler context");
-//        fprintf(stderr, "Could not allocate resampler context\n");
-//        exit(1);
         }
 
         /* set options */
@@ -794,13 +785,7 @@ public:
         /* allocate and init a re-usable frame */
         videoFrame = alloc_picture(c->pix_fmt, c->width, c->height);
 
-        /* If the output format is not YUV420P, then a temporary YUV420P
-         * picture is needed too. It is then converted to the required
-         * output format. */
         tmpVideoFrame = nullptr;
-//        if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-            tmpVideoFrame = alloc_picture(c->pix_fmt, c->width, c->height);
-//        }
 
         /* copy the stream parameters to the muxer */
         ret = avcodec_parameters_from_context(videoStream->codecpar, c);
@@ -862,37 +847,16 @@ public:
     }
 
 
-    /*
- * encode one audio frame and send it to the muxer
- * return 1 when encoding is finished, 0 otherwise
- */
-
     void write_audio_frame(AVFrame* audioFrame) {
         int ret;
         int dst_nb_samples;
 
         if (audioFrame) {
-            /* convert samples from native format to destination codec format, using the resampler */
-            /* compute destination number of samples */
-//            __android_log_print(6, "AudioConverter", "write audio");
-//            int delay = swr_get_delay(swr_ctx, sourceSample_rate);
-//            delay = av_rescale_rnd(
-//                    delay,
-//                    codecContext->sample_rate, sourceSample_rate, AV_ROUND_UP);
             int r = swr_get_delay(swr_ctx, sourceSample_rate);
             dst_nb_samples = av_rescale_rnd(
                     r +
                             audioFrame->nb_samples,
                     codecContext->sample_rate, sourceSample_rate, AV_ROUND_UP);
-//                    codecContext->sample_rate, codecContext->sample_rate, AV_ROUND_UP);
-//        av_assert0(dst_nb_samples == frame->nb_samples);
-//            __android_log_print(6, "AudioConverter", "resample %d, %d, %d, %d, %d, %d", sourceSampleFormat, codecContext->sample_fmt, sourceSample_rate, codecContext->sample_rate, audioFrame->nb_samples, dst_nb_samples);
-
-//            frame->nb_samples = dst_nb_samples;
-            /* when we pass a frame to the encoder, it may keep a reference to it
-             * internally;
-             * make sure we do not overwrite it here
-             */
             ret = av_frame_make_writable(frame);
             if (ret < 0)
                 throw ConvertException(std::string("encode error: av_frame_make_writable error: ") + av_err2str(ret));
@@ -904,8 +868,6 @@ public:
                               (const uint8_t **) audioFrame->data, audioFrame->nb_samples);
             if (ret < 0) {
                 throw ConvertException(std::string("encode error: swr_convert error: ") + av_err2str(ret));
-//            fprintf(stderr, "Error while converting\n");
-//            exit(1);
             }
 
             frame->nb_samples = ret;
@@ -916,7 +878,6 @@ public:
                 audioFrame->pts = av_rescale_q(samples_count,
                                                (AVRational) {1, codecContext->sample_rate},
                                                codecContext->time_base);
-//            samples_count += dst_nb_samples;
                 samples_count += ret;
 
                 write_frame(codecContext, stream, audioFrame);
@@ -942,6 +903,9 @@ public:
                 }
 
                 ret = av_frame_make_writable(frameWrite);
+                if (ret < 0)
+                    throw ConvertException(std::string("encode error: av_frame_make_writable 2 error: ") + av_err2str(ret));
+
                 int nextPos = combineFrame(frame1, lastFramePos, frame, frameWrite, codecContext->frame_size);
                 if (frameWrite->nb_samples < codecContext->frame_size) {
                     lastFrame = true;
@@ -980,7 +944,7 @@ public:
 
         if (audioFrame) {
 
-            __android_log_print(6, "AudioConverter", "write audio");
+//            __android_log_print(6, "AudioConverter", "write audio");
             dst_nb_samples = av_rescale_rnd(
                     swr_get_delay(swr_ctx, sourceSample_rate) +
                             audioFrame->nb_samples,
@@ -1079,15 +1043,13 @@ public:
 
     void write_frame(AVCodecContext *c, AVStream *st, AVFrame *pFrame) {
         AVFormatContext *fmt_ctx = context;
-        int ret;
+        int ret = 0;
+
 
         // send the frame to the encoder
         ret = avcodec_send_frame(c, pFrame);
         if (ret < 0) {
-//            fprintf(stderr, "Error sending a frame to the encoder: %s\n",
-//                    av_err2str(ret));
-//            exit(1);
-            throw ConvertException(std::string("encode error: Error sending a frame to the encoder: ") + av_err2str(ret));
+            throw ConvertException(std::string("encode error: Error sending a video frame to the encoder: ") + av_err2str(ret));
         }
 
         while (ret >= 0) {
@@ -1097,11 +1059,10 @@ public:
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                 break;
             else if (ret < 0) {
-//            fprintf(stderr, "Error encoding a frame: %s\n", av_err2str(ret));
-//            exit(1);
                 throw ConvertException(std::string("encode error: Error encoding a frame: ") + av_err2str(ret));
             }
 
+//            __android_log_print(6, "AudioConverter", "video pts: %ld, %d, %d", pkt.pts, c->time_base.num, c->time_base.den);
             /* rescale output packet timestamp values from codec to stream timebase */
             av_packet_rescale_ts(&pkt, c->time_base, st->time_base);
             pkt.stream_index = st->index;
@@ -1112,8 +1073,6 @@ public:
             av_packet_unref(&pkt);
             if (ret < 0) {
                 throw ConvertException(std::string("encode error: av_interleaved_write_frame: ") + av_err2str(ret));
-//            fprintf(stderr, "Error while writing output packet: %s\n", av_err2str(ret));
-//            exit(1);
             }
         }
 

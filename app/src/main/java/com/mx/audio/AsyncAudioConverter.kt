@@ -10,7 +10,7 @@ class AsyncAudioConverter(private val source: String, private val target: String
     override fun doInBackground(vararg params: Void?): Boolean {
         val file = File(target)
         file.parentFile?.mkdirs()
-        val tempPath = "${this.target}.tmp"
+//        val tempPath = "${this.target}.tmp"
 
         synchronized(this) {
             if (isCancelled)
@@ -28,7 +28,8 @@ class AsyncAudioConverter(private val source: String, private val target: String
         }
 
         if (error == null) {
-            return File(tempPath).renameTo(file)
+            return true
+//            return File(tempPath).renameTo(file)
         } else {
             Log.e("test", "error $error")
         }
