@@ -2,7 +2,7 @@
 // Created by ZhaoLinlin on 2021/5/18.
 //
 
-#include "AudioConverter.h"
+#include "MediaConverter.h"
 //#include "share/pch.h"
 
 extern "C" {
@@ -23,7 +23,7 @@ extern AVCodec ff_android_hw_h264_encoder;
 #define SCALE_FLAGS SWS_BICUBIC
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
 //const char AudioConverter::TAG[] = PROJECTIZED( "AudioConverter" );
-const char AudioConverter::TAG[] = "AudioConverter";
+const char MediaConverter::TAG[] = "AudioConverter";
 //static jmethodID progressMethod = nullptr;
 class ProcessCallback {
 public:
@@ -1214,15 +1214,15 @@ public:
 
 };
 
-AudioConverter::AudioConverter(ProcessCallback* callback, const char *sourcePath, const char *targetPath, const char *format)
+MediaConverter::MediaConverter(ProcessCallback* callback, const char *sourcePath, const char *targetPath, const char *format)
         : target(new OutputStream(targetPath, format)),
         inputStream(new InputStream(callback, target.get(), sourcePath)) {
 
 }
 
-AudioConverter::~AudioConverter() noexcept = default;
+MediaConverter::~MediaConverter() noexcept = default;
 
-const char* AudioConverter::convert() {
+const char* MediaConverter::convert() {
     try {
         inputStream->init();
         inputStream->start();
@@ -1236,7 +1236,7 @@ const char* AudioConverter::convert() {
     return nullptr;
 }
 
-void AudioConverter::cancel() {
+void MediaConverter::cancel() {
     inputStream->stop();
 }
 
@@ -1252,7 +1252,7 @@ static jlong nativeInit(JNIEnv* env,
     const char *formatUTF = env->GetStringUTFChars(format, &copy);
 
     auto* progressCallback = new JavaProgressCallback(env, thzz);
-    auto* converter = new AudioConverter(progressCallback, sourcePath, targetPath, formatUTF);
+    auto* converter = new MediaConverter(progressCallback, sourcePath, targetPath, formatUTF);
 
     env->ReleaseStringUTFChars(source, sourcePath);
     env->ReleaseStringUTFChars(target, targetPath);
@@ -1263,7 +1263,7 @@ static jlong nativeInit(JNIEnv* env,
 
 static jstring nativeConvert(JNIEnv* env,
                           jobject  /*thzz*/, jlong ptr) {
-    auto* converter = reinterpret_cast<AudioConverter*>(ptr);
+    auto* converter = reinterpret_cast<MediaConverter*>(ptr);
     const char* error = converter->convert();
     if (error == nullptr)
         return nullptr;
@@ -1273,13 +1273,13 @@ static jstring nativeConvert(JNIEnv* env,
 
 static void nativeStop(JNIEnv* /*env*/,
                        jobject  /*thzz*/, jlong ptr) {
-    auto* converter = reinterpret_cast<AudioConverter*>(ptr);
+    auto* converter = reinterpret_cast<MediaConverter*>(ptr);
     converter->cancel();
 }
 
 static void nativeRelease(JNIEnv* /*env*/,
                        jobject  /*thzz*/, jlong ptr) {
-    auto* converter = reinterpret_cast<AudioConverter*>(ptr);
+    auto* converter = reinterpret_cast<MediaConverter*>(ptr);
     delete converter;
 }
 
@@ -1292,7 +1292,7 @@ static const JNINativeMethod methods[] =
                 { "nativeRelease",            "(J)V",                             ( void* )nativeRelease        },
         };
 
-void AudioConverter::initClass(JNIEnv *env, jclass clazz) {
+void MediaConverter::initClass(JNIEnv *env, jclass clazz) {
     env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
     JavaProgressCallback::init(env, clazz);
 //    JavaProgressCallback::progressMethod = env->GetMethodID(clazz, "onProgress", "(I)V");
@@ -1306,7 +1306,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_mxtech_audio_AudioConverter_nativeInitClass(
         JNIEnv* env,
         jclass clazz) {
-    AudioConverter::initClass(env, clazz);
+    MediaConverter::initClass(env, clazz);
 }
 
 

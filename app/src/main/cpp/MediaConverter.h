@@ -2,8 +2,8 @@
 // Created by ZhaoLinlin on 2021/5/18.
 //
 
-#ifndef MXCORE_BUILD_AUDIOCONVERTER_H
-#define MXCORE_BUILD_AUDIOCONVERTER_H
+#ifndef MXCORE_BUILD_MEDIACONVERTER_H
+#define MXCORE_BUILD_MEDIACONVERTER_H
 
 #include <memory>
 #include <jni.h>
@@ -12,14 +12,14 @@ class OutputStream;
 class InputStream;
 class ProcessCallback;
 
-class AudioConverter {
+class MediaConverter {
 
 public:
     static void initClass(JNIEnv *pEnv, jclass pJclass);
 
-    AudioConverter(ProcessCallback* callback, const char* sourcePath, const char* targetPath, const char* format);
+    MediaConverter(ProcessCallback* callback, const char* sourcePath, const char* targetPath, const char* format);
 
-    ~AudioConverter() noexcept;
+    ~MediaConverter() noexcept;
 
     const char* convert();
     void cancel();

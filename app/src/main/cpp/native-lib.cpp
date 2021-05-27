@@ -1,7 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <android/log.h>
-#include "AudioConverter.h"
+#include "MediaConverter.h"
 #include "mediacodec/NXMediaCodecEncInterface.h"
 
 
