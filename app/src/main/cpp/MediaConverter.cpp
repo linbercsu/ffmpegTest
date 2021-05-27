@@ -1303,7 +1303,7 @@ void MediaConverter::initClass(JNIEnv *env, jclass clazz) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_mxtech_audio_AudioConverter_nativeInitClass(
+Java_com_mxtech_av_MediaConverter_nativeInitClass(
         JNIEnv* env,
         jclass clazz) {
     MediaConverter::initClass(env, clazz);

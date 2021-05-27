@@ -8,10 +8,11 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.TextView
 import com.mxtech.audio.AsyncAudioConverter
+import com.mxtech.av.AsyncMediaConverter
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var audioConverter: AsyncAudioConverter
+    private lateinit var audioConverter: AsyncMediaConverter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,7 +23,7 @@ class MainActivity : AppCompatActivity() {
 //        textView.text = stringFromJNI()
 //        Log.e("test", "test: max: ${max()}")
 
-            audioConverter = AsyncAudioConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mp4", "mp4") {
+            audioConverter = AsyncMediaConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mp4", "mp4") {
 
 
             }
