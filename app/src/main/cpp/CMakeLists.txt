@@ -55,12 +55,10 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-        ${CMAKE_SOURCE_DIR}/mediacodec/NXMediaCodecDecJni.cpp
         ${CMAKE_SOURCE_DIR}/mediacodec/NXMediaCodecEncLib.c
         ${CMAKE_SOURCE_DIR}/mediacodec/NXMediaCodecEncInterface.c
         ${CMAKE_SOURCE_DIR}/mediacodec/NXMediaCodecEncJni.c
         ${CMAKE_SOURCE_DIR}/mediacodec/NXUtilCodecInfoProcess.cpp
-        ${CMAKE_SOURCE_DIR}/mediacodec/NXUtilComputeTime.c
         ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidAllClass.c
         ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidJni.c
         ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidJniBase.c
