@@ -59,10 +59,10 @@ add_library( # Sets the name of the library.
         ${CMAKE_SOURCE_DIR}/mediacodec/NXMediaCodecEncInterface.c
         ${CMAKE_SOURCE_DIR}/mediacodec/NXMediaCodecEncJni.c
         ${CMAKE_SOURCE_DIR}/mediacodec/NXUtilCodecInfoProcess.cpp
-        ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidAllClass.c
-        ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidJni.c
-        ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidJniBase.c
-        ${CMAKE_SOURCE_DIR}/android/jniUtils/NXAndroidOSBuild.c
+        ${CMAKE_SOURCE_DIR}/mediacodec/android/jniUtils/NXAndroidAllClass.c
+        ${CMAKE_SOURCE_DIR}/mediacodec/android/jniUtils/NXAndroidJni.c
+        ${CMAKE_SOURCE_DIR}/mediacodec/android/jniUtils/NXAndroidJniBase.c
+        ${CMAKE_SOURCE_DIR}/mediacodec/android/jniUtils/NXAndroidOSBuild.c
              native-lib.cpp
         MediaConverter.cpp
 
