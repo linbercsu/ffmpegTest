@@ -229,7 +229,7 @@ fail:
 	return iRet;
 }
 
-int 	YX_AMediaCodec_Enc_encodeVideoFromBuffer( YX_AMediaCodec_Enc * _ctx, uint8_t * _input, int _inputSize, uint8_t * _output, int _maxOutputSize, int * _pOutSize, int ouputFlag)
+int 	YX_AMediaCodec_Enc_encodeVideoFromBuffer( YX_AMediaCodec_Enc * _ctx, uint8_t * _input, int _inputSize, uint8_t * _output, int _maxOutputSize, int * _pOutSize, int ouputFlag, int64_t pts)
 {
 	YX_AMediaCodec_Enc_Opaque * opaque = _ctx->opaque;
 	JNIEnv * env = NULL;
@@ -247,7 +247,7 @@ int 	YX_AMediaCodec_Enc_encodeVideoFromBuffer( YX_AMediaCodec_Enc * _ctx, uint8_
 
 	if(false==opaque->isUseAsyn)
 	{
-		ret = com_nxinc_VMediacodec_Enc__encodeVideoFromBuffer( env, opaque->obj, opaque->inputBuffer, opaque->outputBuffer);
+		ret = com_nxinc_VMediacodec_Enc__encodeVideoFromBuffer( env, opaque->obj, opaque->inputBuffer, opaque->outputBuffer, pts);
 	}
 	else
 	{

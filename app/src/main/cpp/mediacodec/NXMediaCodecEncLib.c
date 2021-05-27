@@ -54,6 +54,8 @@ static int 	sv_iCurrentBitRate = 0;
 #define MIME_VIDEO_ENC_TYPE_H264 0
 #define MIME_VIDEO_ENC_TYPE_HEVC 1
 
+const static AVRational ANDROID_TIMEBASE = (AVRational){1, 1000000};
+
 typedef struct _sAndroidHwContext {
     const AVClass *av_class;
     void *encoder;
@@ -75,6 +77,7 @@ typedef struct _sAndroidHwContext {
 	bool sv_bRefreshedIDRHeader;
 	bool useForMp4;
     bool globalHeader;
+    int64_t lastPts;
 }SAndroidHwContext;
 
 typedef struct _SH264HWParam
@@ -230,6 +233,7 @@ static av_cold int android_hw_encode_init(AVCodecContext *avctx)
 	JNIEnv * env = NULL;
 	int status = YX_JNI_AttachThreadEnv( &env);
 	s->sv_bRefreshedIDRHeader = false;
+	s->lastPts = 0;
 	if( status<0)
 	{
 		return -1;
@@ -595,9 +599,10 @@ static int android_hw_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
 	const uint8_t * pData = NULL;
 	int dstFormat = YX_AMediaCodec_Enc_getColorFormat(s->encoder);
 	int srcFormat = 0;
-    int num = avctx->time_base.num;
-    int den = avctx->time_base.den;
-    AVRational sourceTimebase = (AVRational){1, 1000000};
+	int64_t currentPts = s->lastPts + 1;
+	if (frame != NULL)
+		currentPts = av_rescale_q(frame->pts, avctx->time_base, ANDROID_TIMEBASE);
+
 	int status = YX_JNI_AttachThreadEnv( &pEnv);
 	if( status<0)
 	{
@@ -676,7 +681,7 @@ static int android_hw_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
 	    else
 	    {
 			uint8_t *  pData = (uint8_t * )sFrame.pYBuf;
-			nFlags = YX_AMediaCodec_Enc_encodeVideoFromBuffer( s->encoder, pData, sFrame.iDataSize, pSwapBuf, lv_iMaxSwapSize, &iPacketSize, s->useForMp4);
+			nFlags = YX_AMediaCodec_Enc_encodeVideoFromBuffer( s->encoder, pData, sFrame.iDataSize, pSwapBuf, lv_iMaxSwapSize, &iPacketSize, s->useForMp4, currentPts);
 	    }
 	    *got_packet = 0;
 	    if (iPacketSize <= 0) {
@@ -706,7 +711,7 @@ static int android_hw_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
 
 	    avpkt->pts = YX_AMediaCodec_Enc_getLastCodecPts( s->encoder);
 //        __android_log_print(6, "enc", "video pts: %ld, %d, %d", avpkt->pts, num, den);
-		avpkt->pts = av_rescale_q(avpkt->pts, sourceTimebase, avctx->time_base);
+		avpkt->pts = av_rescale_q(avpkt->pts, ANDROID_TIMEBASE, avctx->time_base);
 //        avpkt->pts = avpkt->pts*den/num/1000000;
 	    avpkt->dts = avpkt->pts;
 		nFlags = YX_AMediaCodec_Enc_getLastFrameFlags( s->encoder);

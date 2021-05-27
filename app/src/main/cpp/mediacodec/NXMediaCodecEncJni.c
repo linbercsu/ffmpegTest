@@ -78,9 +78,9 @@ jint 		com_nxinc_VMediacodec_Enc__initEncoder( JNIEnv *env, jobject thiz, jint w
 	return (*env)->CallIntMethod( env, thiz, class_com_nxinc_VMediacodec_Enc.method_initEncoder, width, height, frameRate, colorFormat, iFrameInterval, bitRate, profile, useInputSurface, _encType);
 }
 
-jint 		com_nxinc_VMediacodec_Enc__encodeVideoFromBuffer( JNIEnv *env, jobject thiz, jbyteArray input, jbyteArray output)
+jint 		com_nxinc_VMediacodec_Enc__encodeVideoFromBuffer( JNIEnv *env, jobject thiz, jbyteArray input, jbyteArray output, int64_t pts)
 {
-	return (*env)->CallIntMethod( env, thiz, class_com_nxinc_VMediacodec_Enc.method_encodeVideoFromBuffer, input, output);
+	return (*env)->CallIntMethod( env, thiz, class_com_nxinc_VMediacodec_Enc.method_encodeVideoFromBuffer, input, output, pts);
 
 }
 
@@ -208,7 +208,7 @@ int 	Java_loadClass__com_nxinc_VMediacodec_Enc(JNIEnv *env)
 
 	class_id = class_com_nxinc_VMediacodec_Enc.id;
 	name = "encodeVideoFromBuffer";
-	sign = "([B[B)I";
+	sign = "([B[BJ)I";
 	class_com_nxinc_VMediacodec_Enc.method_encodeVideoFromBuffer =
 			YX_GetMethodID__catchAll(env, class_id, name, sign);
 	if (class_com_nxinc_VMediacodec_Enc.method_encodeVideoFromBuffer == NULL)

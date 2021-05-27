@@ -35,7 +35,7 @@ void 	YX_AMediaCodec_Enc_destoryEncoderObject( YX_AMediaCodec_Enc * _ctx);
 
 int 	YX_AMediaCodec_Enc_initEncoder( YX_AMediaCodec_Enc * _ctx, int _width, int _height, int _frameRate, int _colorFormat, int _iFrameInterval, int _bitRate, int _profile, bool _useInputSurface, int _encType);
 
-int 	YX_AMediaCodec_Enc_encodeVideoFromBuffer( YX_AMediaCodec_Enc * _ctx, uint8_t * _input, int _inputSize, uint8_t * _output, int _maxOutputSize, int * _pOutSize,  int ouputFlag);
+int 	YX_AMediaCodec_Enc_encodeVideoFromBuffer( YX_AMediaCodec_Enc * _ctx, uint8_t * _input, int _inputSize, uint8_t * _output, int _maxOutputSize, int * _pOutSize,  int ouputFlag, int64_t pts);
 
 int 	YX_AMediaCodec_Enc_encodeVideoFromTexture( YX_AMediaCodec_Enc * _ctx, int * _input, int _inputSize, uint8_t * _output, int _maxOutputSize, int * _pOutSize,  int ouputFlag);
 

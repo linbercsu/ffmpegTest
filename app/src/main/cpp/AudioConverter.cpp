@@ -352,6 +352,9 @@ public:
         open_codec_context(&video_stream_idx, &video_dec_ctx, fmt_ctx, AVMEDIA_TYPE_VIDEO);
         video_stream = fmt_ctx->streams[video_stream_idx];
 
+        video_dec_ctx->pkt_timebase = video_stream->time_base;
+
+
         /* allocate image where the decoded image will be put */
         width = video_dec_ctx->width;
         height = video_dec_ctx->height;
@@ -512,6 +515,9 @@ private:
     int64_t next_ptsVideo{0};
     int sourceWidth = 0;
     int sourceHeight = 0;
+    AVRational sourceVideoTimebase{};
+    int64_t firstVideoPts{-1};
+    bool firstVideoPtsGot{false};
     const char* sourceRotate = nullptr;
 public:
     /*
@@ -664,7 +670,8 @@ public:
                  * of which frame timestamps are represented. For fixed-fps content,
                  * timebase should be 1/framerate and timestamp increments should be
                  * identical to 1. */
-                videoStream->time_base = (AVRational){ 1, STREAM_FRAME_RATE };
+//                videoStream->time_base = (AVRational){ 1, STREAM_FRAME_RATE };
+                videoStream->time_base = sourceVideoTimebase;
                 videoCodecContext->framerate = (AVRational){STREAM_FRAME_RATE, 1};
                 videoCodecContext->time_base = videoStream->time_base;
                 videoCodecContext->gop_size      = 6; /* emit one intra frame every twelve frames at most */
@@ -1001,6 +1008,13 @@ public:
             return;
         }
 
+        if (!firstVideoPtsGot) {
+            firstVideoPtsGot = true;
+            firstVideoPts = pFrame->pts;
+        }
+
+        int64_t p = pFrame->pts - firstVideoPts;
+
         AVCodecContext *c = videoCodecContext;
 //        __android_log_print(6, "AudioConverter", "write video %d, %d, %d, %d, %d, %d", pFrame->format, pFrame->width, pFrame->height, c->pix_fmt, c->width, c->height);
         int ret;
@@ -1029,13 +1043,16 @@ public:
                         pFrame->linesize, 0, pFrame->height, videoFrame->data,
                       videoFrame->linesize);
 
-            videoFrame->pts = ++next_ptsVideo;
+//            videoFrame->pts = ++next_ptsVideo;
 
+            videoFrame->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
+
+//            __android_log_print(6, "AudioConverter", "video pts: %ld, %ld, %ld, %ld, %d, %d, %d, %d", videoFrame->pts, p, pFrame->pts, firstVideoPts, c->time_base.num, c->time_base.den, sourceVideoTimebase.num, sourceVideoTimebase.den);
             write_frame(videoCodecContext, videoStream, videoFrame);
         } else {
 
-            pFrame->pts = ++next_ptsVideo;
-
+//            pFrame->pts = ++next_ptsVideo;
+            pFrame->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
             write_frame(videoCodecContext, videoStream, pFrame);
 //            fill_yuv_image(ost->frame, ost->next_pts, c->width, c->height);
         }
@@ -1100,12 +1117,13 @@ public:
     void onVideoStream(AVCodecContext *sourceCodecContext, AVStream* st) override {
         sourceWidth = sourceCodecContext->width;
         sourceHeight = sourceCodecContext->height;
+        sourceVideoTimebase = sourceCodecContext->pkt_timebase;
         AVDictionaryEntry *pEntry = av_dict_get(st->metadata, "rotate", nullptr,
                                                 AV_DICT_MATCH_CASE);
         if (pEntry != nullptr) {
             sourceRotate = pEntry->value;
         }
-        __android_log_print(6, "AudioConverter", "onVideoStream %d, %d", sourceWidth, sourceHeight);
+        __android_log_print(6, "AudioConverter", "onVideoStream %d, %d, %d, %d", sourceWidth, sourceHeight, sourceCodecContext->time_base.num, sourceCodecContext->time_base.den);
         addVideo(sourceCodecContext);
     }
 

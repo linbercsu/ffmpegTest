@@ -318,7 +318,7 @@ public class NXAvcEncoder {
         int err = 0;
         while( configbyte==null)
         {
-            err = encodeVideoFromBuffer(yuvData, avcData);
+            err = encodeVideoFromBuffer(yuvData, avcData, 0);
             if ( err<0)
             {
                 break;
@@ -400,7 +400,7 @@ public class NXAvcEncoder {
 
     // 放入图像数据并取出编码后的数据；
     @SuppressLint( "NewApi")
-    public int encodeVideoFromBuffer( byte[] input, byte[] output)
+    public int encodeVideoFromBuffer( byte[] input, byte[] output, long pts)
     {
         // 重新配置编码器;
         if (isNeedReconfigure)
@@ -428,7 +428,7 @@ public class NXAvcEncoder {
         {
             inputBufferIndex = m_mediaCodec.dequeueInputBuffer(-1);
             if (inputBufferIndex >= 0) {
-                long pts = computePresentationTime(m_getnerateIndex);
+//                long pts = computePresentationTime(m_getnerateIndex);
                 ByteBuffer inputBuffer = getInputBufferByIdx(inputBufferIndex);
                 inputBuffer.clear();
                 inputBuffer.put(input);

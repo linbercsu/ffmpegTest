@@ -26,7 +26,7 @@ jboolean 	com_nxinc_VMediacodec_Enc__isInNotSupportedList(JNIEnv *env);
 
 jint 		com_nxinc_VMediacodec_Enc__initEncoder( JNIEnv *env, jobject thiz, jint width, jint height, jint frameRate, jint colorFormat, jint iFrameInterval, jint bitRate, jint profile, jboolean useInputSurface, int _encType);
 
-jint 		com_nxinc_VMediacodec_Enc__encodeVideoFromBuffer( JNIEnv *env, jobject thiz, jbyteArray input, jbyteArray output);
+jint 		com_nxinc_VMediacodec_Enc__encodeVideoFromBuffer( JNIEnv *env, jobject thiz, jbyteArray input, jbyteArray output, int64_t pts);
 
 jint 		com_nxinc_VMediacodec_Enc__encodeVideoFromBufferAsyn( JNIEnv *env, jobject thiz, jbyteArray input, jbyteArray output);
 
