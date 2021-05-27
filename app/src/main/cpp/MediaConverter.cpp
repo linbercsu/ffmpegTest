@@ -19,6 +19,8 @@ extern "C" {
 #include <mutex>
 #include <utility>
 
+#include "mediacodec/NXMediaCodecEncInterface.h"
+
 extern AVCodec ff_android_hw_h264_encoder;
 #define SCALE_FLAGS SWS_BICUBIC
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
@@ -1295,6 +1297,11 @@ static const JNINativeMethod methods[] =
 void MediaConverter::initClass(JNIEnv *env, jclass clazz) {
     env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
     JavaProgressCallback::init(env, clazz);
+    JavaVM* vm = nullptr;
+    env->GetJavaVM(&vm);
+    jint version = env->GetVersion();
+    __android_log_print(6, "MediaConverter", "initClass %d", version);
+    YX_AMediaCodec_Enc_loadClassEnv(vm, version);
 //    JavaProgressCallback::progressMethod = env->GetMethodID(clazz, "onProgress", "(I)V");
 //    if ( env->ExceptionCheck() )
 //    {

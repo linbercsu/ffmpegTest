@@ -17,7 +17,6 @@
 #include "libavcodec/codec.h"
 #include "android/JniUtils/NXAndroidJni.h"
 #include "NXMediaCodecEncInterface.h"
-#include "NXUtilComputeTime.h"
 #include "NXUtilCodecInfoProcess.h"
 
 #include <unistd.h>

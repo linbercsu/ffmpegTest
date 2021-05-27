@@ -170,7 +170,7 @@ int 	Java_loadClass__com_nxinc_VMediacodec_Enc(JNIEnv *env)
 		goto ignore;
 	}
 
-	sign = "com/nxinc/videoedit/VMediacodec/NXAvcEncoder";
+	sign = "com/mxtech/av/NXAvcEncoder";
 	class_com_nxinc_VMediacodec_Enc.id =
 			YX_FindClass__asGlobalRef__catchAll(env, sign);
 	if (class_com_nxinc_VMediacodec_Enc.id == NULL)
@@ -186,7 +186,7 @@ int 	Java_loadClass__com_nxinc_VMediacodec_Enc(JNIEnv *env)
 
 	class_id = class_com_nxinc_VMediacodec_Enc.id;
 	name = "createEncoderObject";
-	sign = "()Lcom/nxinc/videoedit/VMediacodec/NXAvcEncoder;";
+	sign = "()Lcom/mxtech/av/NXAvcEncoder;";
 	class_com_nxinc_VMediacodec_Enc.method_createEncoderObject =
 			YX_GetStaticMethodID__catchAll(env, class_id, name, sign);
 	if (class_com_nxinc_VMediacodec_Enc.method_createEncoderObject == NULL) {
@@ -312,7 +312,7 @@ int 	Java_loadClass__com_nxinc_VMediacodec_Enc(JNIEnv *env)
 		goto fail;
 
 
-	YX_ALOGE("Encoder Loader: OK: '%s' loaded\n", "com/nxinc/videoedit/VMediacodec/NXAvcEncoder");
+	YX_ALOGE("Encoder Loader: OK: '%s' loaded\n", "NXAvcEncoder");
 ignore:
 	ret = 0;
 fail:

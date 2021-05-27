@@ -1,4 +1,4 @@
-package com.nxinc.videoedit.VMediacodec;
+package com.mxtech.av;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
@@ -6,23 +6,12 @@ import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
-import android.opengl.EGL14;
-import android.opengl.EGLConfig;
-import android.opengl.EGLContext;
-import android.opengl.EGLDisplay;
-import android.opengl.EGLExt;
-import android.opengl.EGLSurface;
-import android.opengl.GLES11Ext;
-import android.opengl.GLES20;
-import android.opengl.Matrix;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Surface;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 

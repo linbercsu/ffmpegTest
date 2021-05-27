@@ -1,8 +1,6 @@
 #include <jni.h>
 #include <string>
 #include <android/log.h>
-#include "MediaConverter.h"
-#include "mediacodec/NXMediaCodecEncInterface.h"
 
 
 
@@ -46,8 +44,6 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         // LOGE("ERROR: GetEnv failed\n");
         return JNI_FALSE;
     }
-
-    YX_AMediaCodec_Enc_loadClassEnv(vm, JNI_VERSION_1_4);
 
     return JNI_VERSION_1_4;
 }
