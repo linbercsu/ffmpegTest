@@ -515,6 +515,8 @@ private:
     int64_t next_ptsVideo{0};
     int sourceWidth = 0;
     int sourceHeight = 0;
+    int targetWidth{0};
+    int targetHeight{0};
     AVRational sourceVideoTimebase{};
     int64_t firstVideoPts{-1};
     bool firstVideoPtsGot{false};
@@ -558,6 +560,7 @@ public:
 
     void addVideo(AVCodecContext *sourceCodecContext) {
         __android_log_print(6, "AudioConverter", "addVideo");
+        computeTargetSize(sourceCodecContext);
         if (context->oformat->video_codec == AV_CODEC_ID_MPEG4) {
             context->oformat->video_codec = AV_CODEC_ID_H264;
         }
@@ -660,12 +663,15 @@ public:
                 videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
                 videoCodecContext->codec_id = codec_id;
 
-                videoCodecContext->bit_rate = 4000000;
+                videoCodecContext->bit_rate =  (5000000 * (int64_t)targetWidth * targetHeight) /( 1080 * 720);
                 /* Resolution must be a multiple of two. */
 //                videoCodecContext->width    = 352;
 //                videoCodecContext->height   = 288;
-                videoCodecContext->width    = 640;
-                videoCodecContext->height = 360;
+
+                videoCodecContext->width    = targetWidth;
+                videoCodecContext->height = targetHeight;
+
+                __android_log_print(6, "AudioConverter", "add video parameter %ld, %d, %d, %d, %d", videoCodecContext->bit_rate, targetWidth, targetHeight, sourceWidth, sourceHeight);
                 /* timebase: This is the fundamental unit of time (in seconds) in terms
                  * of which frame timestamps are represented. For fixed-fps content,
                  * timebase should be 1/framerate and timestamp increments should be
@@ -687,13 +693,13 @@ public:
 
                 if (videoCodecContext->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
                     /* just for testing, we also add B-frames */
-                    videoCodecContext->max_b_frames = 2;
+//                    videoCodecContext->max_b_frames = 2;
                 }
                 if (videoCodecContext->codec_id == AV_CODEC_ID_MPEG1VIDEO) {
                     /* Needed to avoid using macroblocks in which some coeffs overflow.
                      * This does not happen with normal video, it just happens here as
                      * the motion of the chroma plane does not match the luma plane. */
-                    videoCodecContext->mb_decision = 2;
+//                    videoCodecContext->mb_decision = 2;
                 }
                 break;
 
@@ -1093,6 +1099,54 @@ public:
             }
         }
 
+    }
+    
+    static int computeSize(int s, int max) {
+        while (s > max) {
+            s = s - 64;
+        }
+        
+        return s;
+    }
+    
+    static int normalizeSize(int s) {
+        int y = s % 64;
+        if (y == 0)
+            return s;
+        
+        int r = s / 64;
+        int ret = 64 * (r - 1);
+        if (ret <= 0)
+            return 64;
+        else
+            return ret;
+    }
+ 
+    void computeTargetSize(AVCodecContext *sourceCodecContext) {
+        int w = sourceCodecContext->width;
+        int h = sourceCodecContext->height;
+
+        if (w < h) {
+            w = sourceCodecContext->height;
+            h = sourceCodecContext->width;
+        }
+
+        int cW = computeSize(w, 1080);
+        int cH = computeSize(h, 720);
+
+        float scaleW, scaleH;
+        scaleW = (float) cW / (float) w;
+        scaleH = (float) cH / (float) h;
+
+        float scale = scaleW < scaleH ? scaleW : scaleH;
+        targetWidth = normalizeSize((int)(w * scale));
+        targetHeight = normalizeSize((int)(h * scale));
+
+        if (sourceCodecContext->width < sourceCodecContext->height) {
+            int temp = targetWidth;
+            targetWidth = targetHeight;
+            targetHeight = temp;
+        }
     }
 
     void onInit() override {
