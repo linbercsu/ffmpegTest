@@ -14,7 +14,7 @@
 #include "libavcodec/internal.h"
 
 #include "libavcodec/avcodec.h"
-#include "libavcodec/codec.h"
+//#include "libavcodec/codec.h"
 #include "android/JniUtils/NXAndroidJni.h"
 #include "NXMediaCodecEncInterface.h"
 #include "NXUtilCodecInfoProcess.h"
