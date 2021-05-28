@@ -1071,7 +1071,9 @@ public:
 
 //        if (c->pix_fmt != pFrame->format || targetWidthTmp != pFrame->width || targetHeightTmp != pFrame->height) {
         {
+//            __android_log_print(6, "MediaConverter", "convert for scale");
             AVFrame* tempFrame = convertForScale(pFrame);
+//            __android_log_print(6, "MediaConverter", "scale");
             tempFrame = scaleVideo(tempFrame);
 
 
@@ -1110,6 +1112,93 @@ public:
             if ((ret = av_frame_make_writable(videoFrame)) < 0)
                 throw ConvertException(std::string("encode error: av_frame_make_writable video error: ") + av_err2str(ret));
 
+        }
+
+        if (AV_PIX_FMT_YUV422P == pFrame->format) {
+            libyuv::I422ToI420(
+                    pFrame->data[0], pFrame->linesize[0],
+                    pFrame->data[1], pFrame->linesize[1],
+                    pFrame->data[2], pFrame->linesize[2],
+
+                    videoFrame->data[0], videoFrame->linesize[0],
+                    videoFrame->data[1], videoFrame->linesize[1],
+                    videoFrame->data[2], videoFrame->linesize[2],
+
+                    pFrame->width,
+                    pFrame->height
+                    );
+
+            return videoFrame;
+        }
+        else if (AV_PIX_FMT_YUV444P == pFrame->format) {
+            libyuv::I444ToI420(
+                    pFrame->data[0], pFrame->linesize[0],
+                    pFrame->data[1], pFrame->linesize[1],
+                    pFrame->data[2], pFrame->linesize[2],
+
+                    videoFrame->data[0], videoFrame->linesize[0],
+                    videoFrame->data[1], videoFrame->linesize[1],
+                    videoFrame->data[2], videoFrame->linesize[2],
+
+                    pFrame->width,
+                    pFrame->height
+                    );
+
+            return videoFrame;
+        } else if (AV_PIX_FMT_NV12 == pFrame->format) {
+            libyuv::NV12ToI420(
+                    pFrame->data[0], pFrame->linesize[0],
+                    pFrame->data[1], pFrame->linesize[1],
+
+                    videoFrame->data[0], videoFrame->linesize[0],
+                    videoFrame->data[1], videoFrame->linesize[1],
+                    videoFrame->data[2], videoFrame->linesize[2],
+
+                    pFrame->width,
+                    pFrame->height
+                    );
+
+            return videoFrame;
+        } else if (AV_PIX_FMT_NV21 == pFrame->format) {
+            libyuv::NV21ToI420(
+                    pFrame->data[0], pFrame->linesize[0],
+                    pFrame->data[1], pFrame->linesize[1],
+
+                    videoFrame->data[0], videoFrame->linesize[0],
+                    videoFrame->data[1], videoFrame->linesize[1],
+                    videoFrame->data[2], videoFrame->linesize[2],
+
+                    pFrame->width,
+                    pFrame->height
+                    );
+
+            return videoFrame;
+        } else if (AV_PIX_FMT_YUYV422 == pFrame->format) {
+            libyuv::YUY2ToI420(
+                    pFrame->data[0], pFrame->linesize[0],
+
+                    videoFrame->data[0], videoFrame->linesize[0],
+                    videoFrame->data[1], videoFrame->linesize[1],
+                    videoFrame->data[2], videoFrame->linesize[2],
+
+                    pFrame->width,
+                    pFrame->height
+            );
+
+            return videoFrame;
+        } else if (AV_PIX_FMT_UYVY422 == pFrame->format) {
+            libyuv::UYVYToI420(
+                    pFrame->data[0], pFrame->linesize[0],
+
+                    videoFrame->data[0], videoFrame->linesize[0],
+                    videoFrame->data[1], videoFrame->linesize[1],
+                    videoFrame->data[2], videoFrame->linesize[2],
+
+                    pFrame->width,
+                    pFrame->height
+            );
+
+            return videoFrame;
         }
 
         /* as we only generate a YUV420P picture, we must convert it
