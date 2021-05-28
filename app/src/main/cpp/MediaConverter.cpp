@@ -27,6 +27,211 @@ extern AVCodec ff_android_hw_h264_encoder;
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
 //const char AudioConverter::TAG[] = PROJECTIZED( "AudioConverter" );
 const char MediaConverter::TAG[] = "AudioConverter";
+
+#include <mutex>
+#include <thread>
+#include <condition_variable>
+#include <deque>
+
+class ConvertException : public std::exception {
+public:
+    explicit ConvertException(std::string  what): w(std::move(what)) {
+
+    }
+    explicit ConvertException(const char* what) noexcept: w(what)  {
+    }
+
+    explicit ConvertException(const std::exception& e) noexcept :w(e.what()) {
+
+    }
+
+    ConvertException& operator =(const std::exception& e) noexcept {
+        if (&e == this)
+            return *this;
+
+        w = e.what();
+        return *this;
+    }
+
+    const char * what() const noexcept override {
+        return w.c_str();
+    }
+
+private:
+    std::string w;
+};
+
+namespace in {
+    template <typename T>
+    class queue
+    {
+    private:
+        std::mutex              d_mutex{};
+        std::condition_variable d_condition{};
+        std::condition_variable d_condition_full{};
+        std::deque<T>           d_queue{};
+    public:
+        void push(T const& value) {
+//            __android_log_print(6, "AudioConverter", "push");
+            {
+                std::unique_lock<std::mutex> lock(this->d_mutex);
+                this->d_condition_full.wait(lock, [=]{
+                    return this->d_queue.size() < 2; }
+                    );
+                d_queue.push_front(value);
+            }
+            this->d_condition.notify_one();
+//            __android_log_print(6, "AudioConverter", "push end");
+        }
+        T pop() {
+//            __android_log_print(6, "AudioConverter", "pop");
+            std::unique_lock<std::mutex> lock(this->d_mutex);
+            this->d_condition.wait(lock, [=]{ return !this->d_queue.empty(); });
+            T rc(this->d_queue.back());
+            this->d_queue.pop_back();
+            this->d_condition_full.notify_one();
+//            __android_log_print(6, "AudioConverter", "pop end");
+            return rc;
+        }
+    };
+    
+    enum class TYPE {
+        ON_INIT,
+        ON_AUDIO,
+        ON_VIDEO,
+        ON_START,
+        ON_AUDIO_FRAME,
+        ON_VIDEO_FRAME,
+        ON_END,
+        ON_EXCEPTION
+    };
+    
+    class Message {
+    private:
+        explicit Message(const TYPE& type): t(type) {
+            
+        }
+
+    public:
+        static Message onInit() {
+            return Message(TYPE::ON_INIT);
+        }
+
+        static Message onAudio(AVCodecContext *sourceCodecContext) {
+            Message msg = Message(TYPE::ON_AUDIO);
+
+            msg.sourceSample_rate = sourceCodecContext->sample_rate;
+            msg.sourceLayout = sourceCodecContext->channel_layout;
+            msg.sourceChannels = sourceCodecContext->channels;
+            msg.sourceSampleFormat = sourceCodecContext->sample_fmt;
+
+            return msg;
+        }
+
+        static Message onVideo(AVCodecContext *sourceCodecContext, AVStream* st) {
+            Message msg = Message(TYPE::ON_VIDEO);
+            msg.sourceWidth = sourceCodecContext->width;
+            msg.sourceHeight = sourceCodecContext->height;
+            msg.sourceVideoTimebase = sourceCodecContext->pkt_timebase;
+            AVDictionaryEntry *pEntry = av_dict_get(st->metadata, "rotate", nullptr,
+                                                    AV_DICT_MATCH_CASE);
+            if (pEntry != nullptr) {
+                msg.sourceRotate = pEntry->value;
+            }
+            return msg;
+        }
+
+        static Message onStart() {
+            Message msg = Message(TYPE::ON_START);
+            return msg;
+        }
+        
+        static Message onAudioFrame(AVFrame* pFrame) {
+            Message msg = Message(TYPE::ON_AUDIO_FRAME);
+            msg.audioFrame = pFrame;
+            return msg;
+        }
+        
+        static Message onVideoFrame(AVFrame* pFrame) {
+            Message msg = Message(TYPE::ON_VIDEO_FRAME);
+            msg.videoFrame = pFrame;
+            return msg;
+        }
+        
+        static Message onEnd() {
+            return Message(TYPE::ON_END);
+        }
+                
+        static Message onException(const std::exception& e) {
+            Message msg = Message(TYPE::ON_EXCEPTION);
+            msg.exception = e;
+            return msg;
+        }
+        
+        TYPE type() const {
+            return t;
+        }
+
+    public:
+        Message(const Message& msg) noexcept:
+                sourceSample_rate(msg.sourceSample_rate),
+                sourceLayout(msg.sourceLayout),
+                sourceChannels(msg.sourceChannels),
+                sourceSampleFormat(msg.sourceSampleFormat),
+                sourceWidth(msg.sourceWidth),
+                sourceHeight(msg.sourceHeight),
+                sourceVideoTimebase(msg.sourceVideoTimebase),
+                sourceRotate(msg.sourceRotate),
+                audioFrame(msg.audioFrame),
+                videoFrame(msg.videoFrame),
+                exception(msg.exception),
+                t(msg.t)
+                {
+
+        }
+
+        Message& operator =(const Message &msg) noexcept {
+            if (&msg == this)
+                return *this;
+
+            sourceSample_rate = msg.sourceSample_rate;
+            sourceLayout = msg.sourceLayout;
+            sourceChannels = msg.sourceChannels;
+            sourceSampleFormat = msg.sourceSampleFormat;
+            sourceWidth = msg.sourceWidth;
+            sourceHeight = msg.sourceHeight;
+            sourceVideoTimebase = msg.sourceVideoTimebase;
+            sourceRotate = msg.sourceRotate;
+            audioFrame = msg.audioFrame;
+            videoFrame = msg.videoFrame;
+            exception = msg.exception;
+            t = msg.t;
+
+            return *this;
+        }
+
+
+    public:
+        int sourceSample_rate{0};
+        uint64_t sourceLayout{0};
+        int sourceChannels{0};
+        AVSampleFormat sourceSampleFormat{AV_SAMPLE_FMT_NONE};
+    public:
+        int sourceWidth{0};
+        int sourceHeight{0};
+        AVRational sourceVideoTimebase{0, 1};
+        std::string sourceRotate;
+    public:
+        AVFrame* audioFrame{nullptr};
+        AVFrame* videoFrame{nullptr};
+    public:
+        ConvertException exception{""};
+        
+    private:
+        TYPE t;
+    };
+}
+
 //static jmethodID progressMethod = nullptr;
 class ProcessCallback {
 public:
@@ -57,7 +262,8 @@ public:
             progress = 100;
         if (progress > lasProgress) {
             lasProgress = progress;
-            env->CallVoidMethod(javaObject, progressMethod, progress);
+            __android_log_print(6, "AudioConverter", "progress %d", lasProgress);
+//            env->CallVoidMethod(javaObject, progressMethod, progress);
         }
     }
 
@@ -72,21 +278,7 @@ public:
 jmethodID JavaProgressCallback::progressMethod = nullptr;
 
 
-class ConvertException : public std::exception {
-public:
-    explicit ConvertException(std::string  what): w(std::move(what)) {
 
-    }
-    explicit ConvertException(const char* what): w(what) {
-    }
-
-    const char * what() const noexcept override {
-        return w.c_str();
-    }
-
-private:
-    std::string w;
-};
 
 class InputStreamCallback {
 public:
@@ -97,6 +289,7 @@ public:
     virtual void onAudioFrame(AVFrame* frame) = 0;
     virtual void onVideoFrame(AVFrame* frame) = 0;
     virtual void onEnd() = 0;
+    virtual void onException(const std::exception& e) = 0;
 };
 
 class InputStream {
@@ -147,13 +340,40 @@ private:
     int audio_stream_idx = -1;
     int video_stream_idx = -1;
     AVFrame *frame = nullptr;
+    AVFrame *frame1 = nullptr;
     AVFrame *videoFrame = nullptr;
+    AVFrame *videoFrame1 = nullptr;
+    AVFrame* audioFrameList[2];
+    AVFrame* videoFrameList[2];
     AVPacket *pkt = nullptr;
     int audio_frame_count = 0;
     int64_t duration = 0;
     std::unique_ptr<ProcessCallback> processCallback;
     bool stopped = false;
     std::mutex lockMutex;
+    std::unique_ptr<std::thread> thread{};
+    
+    AVFrame * getAudioFrame() {
+//        AVFrame * f = audioFrameList[0];
+//        AVFrame * f1 = audioFrameList[1];
+//        audioFrameList[0] = f1;
+//        audioFrameList[1] = f;
+//
+//        return f;
+        AVFrame *pFrame = av_frame_alloc();
+        return pFrame;
+    }
+    
+    AVFrame * getVideoFrame() {
+//        AVFrame * f = videoFrameList[0];
+//        AVFrame * f1 = videoFrameList[1];
+//        videoFrameList[0] = f1;
+//        videoFrameList[1] = f;
+//
+//        return f;
+        AVFrame *pFrame = av_frame_alloc();
+        return pFrame;
+    }
 
     bool isStopped() {
         std::lock_guard<std::mutex> lg(lockMutex);
@@ -178,10 +398,11 @@ private:
             throw ConvertException(std::string("decode error: Error submitting a packet for decoding: ") + av_err2str(ret));
 //            fprintf(stderr, "Error submitting a packet for decoding (%s)\n", av_err2str(ret));
         }
-
+        
         // get all the available frames from the decoder
         while (ret >= 0) {
-            ret = avcodec_receive_frame(dec, frame);
+            AVFrame *pFrame = getAudioFrame();
+            ret = avcodec_receive_frame(dec, pFrame);
             if (ret < 0) {
                 // those two return values are special and mean there is no output
                 // frame available, but there were no errors during decoding
@@ -194,12 +415,12 @@ private:
             }
 
             // write the frame data to output file
-            if (dec->codec->type == AVMEDIA_TYPE_VIDEO)
-                output_video_frame(frame);
-            else
-                output_audio_frame(frame);
+//            if (dec->codec->type == AVMEDIA_TYPE_VIDEO)
+//                output_video_frame(frame);
+//            else
+                output_audio_frame(pFrame);
 
-            av_frame_unref(frame);
+//            av_frame_unref(frame);
         }
 
         return 0;
@@ -217,7 +438,8 @@ private:
 
         // get all the available frames from the decoder
         while (ret >= 0) {
-            ret = avcodec_receive_frame(dec, videoFrame);
+            AVFrame *pFrame = getVideoFrame();
+            ret = avcodec_receive_frame(dec, pFrame);
             if (ret < 0) {
                 // those two return values are special and mean there is no output
                 // frame available, but there were no errors during decoding
@@ -230,9 +452,9 @@ private:
             }
 
             // write the frame data to output file
-            output_video_frame(videoFrame);
+            output_video_frame(pFrame);
 
-            av_frame_unref(videoFrame);
+//            av_frame_unref(videoFrame);
         }
 
         return 0;
@@ -336,10 +558,17 @@ public:
 
         frame = av_frame_alloc();
         if (!frame) {
-//            fprintf(stderr, "Could not allocate frame\n");
-//            AVERROR(ENOMEM);
             throw ConvertException("memory error: Could not allocate frame");
         }
+
+        frame1 = av_frame_alloc();
+        if (!frame1) {
+            throw ConvertException("memory error: Could not allocate frame");
+        }
+
+        audioFrameList[0] = frame;
+        audioFrameList[1] = frame1;
+
 
         pkt = av_packet_alloc();
         if (!pkt) {
@@ -355,6 +584,12 @@ public:
         if (!videoFrame) {
             throw ConvertException("memory error: Could not allocate frame");
         }
+        videoFrame1 = av_frame_alloc();
+        if (!videoFrame1) {
+            throw ConvertException("memory error: Could not allocate frame");
+        }
+        videoFrameList[0] = videoFrame;
+        videoFrameList[1] = videoFrame1;
 
         open_codec_context(&video_stream_idx, &video_dec_ctx, fmt_ctx, AVMEDIA_TYPE_VIDEO);
         video_stream = fmt_ctx->streams[video_stream_idx];
@@ -372,7 +607,29 @@ public:
         callback->onVideoStream(video_dec_ctx, video_stream);
     }
 
+    static void run(InputStream* stream) {
+        stream->doStart();
+    }
+
+    void join() {
+        thread->join();
+    }
+
     void start() {
+        thread.reset(new std::thread(run, this));
+    }
+    void doStart() {
+        try {
+            doStartInner();
+        } catch (std::exception& e) {
+            __android_log_print(6, "AudioConverter", "doStart exception %s", e.what());
+            callback->onException(e);
+        }
+    }
+    void doStartInner() {
+        __android_log_print(6, "AudioConverter", "doStartInner");
+        init();
+
         callback->onStart();
         int ret = 0;
 
@@ -551,33 +808,35 @@ private:
     int64_t firstVideoPts{-1};
     bool firstVideoPtsGot{false};
     std::string sourceRotate{};
+    in::queue<in::Message> messageQueue{};
 public:
-    /*
-     * useless
-     */
-    void init() {
-        int ret;
-        ret = avformat_alloc_output_context2(&context, nullptr, format.c_str(), targetPath.c_str());
-        if (ret < 0) {
-            throw ConvertException(std::string("create target: can't alloc output") + av_err2str(ret));
-        }
+    void loop() {
+        __android_log_print(6, "AudioConverter", "start loop");
+        while (true) {
+            const in::Message &message = messageQueue.pop();
 
-        add_stream(context->oformat->audio_codec, true);
+//            __android_log_print(6, "AudioConverter", "loop %d", message.type());
 
-        AVDictionary *opt = nullptr;
-        open_audio(opt);
-
-        if (!(context->oformat->flags & AVFMT_NOFILE)) {
-            ret = avio_open(&context->pb, targetPath.c_str(), AVIO_FLAG_WRITE);
-            if (ret < 0) {
-                throw ConvertException(std::string("create target: can't open avio:") + av_err2str(ret));
+            if (message.type() == in::TYPE::ON_INIT) {
+                doOnInit();
+            } else if (message.type() == in::TYPE::ON_START) {
+                doOnStart();
+            } else if (message.type() == in::TYPE::ON_AUDIO) {
+                doOnAudioStream(message);
+            } else if (message.type() == in::TYPE::ON_VIDEO) {
+                doOnVideoStream(message);
+            } else if (message.type() == in::TYPE::ON_AUDIO_FRAME) {
+                doOnAudioFrame(message.audioFrame);
+            } else if (message.type() == in::TYPE::ON_VIDEO_FRAME) {
+                doOnVideoFrame(message.videoFrame);
+            } else if (message.type() == in::TYPE::ON_END) {
+                doOnEnd();
+                break;
+            } else if (message.type() == in::TYPE::ON_EXCEPTION) {
+                doOnException(message.exception);
+                throw message.exception;
             }
-        }
-        /* Write the stream header, if any. */
-
-        ret = avformat_write_header(context, &opt);
-        if (ret < 0)
-            throw ConvertException(std::string("create target: can't write header") + av_err2str(ret));
+        }   
     }
 
     void addAudio() {
@@ -588,9 +847,9 @@ public:
         open_audio(opt);
     }
 
-    void addVideo(AVCodecContext *sourceCodecContext) {
-        __android_log_print(6, "AudioConverter", "addVideo %d", sourceCodecContext->pix_fmt);
-        computeTargetSize(sourceCodecContext);
+    void addVideo() {
+        __android_log_print(6, "AudioConverter", "addVideo");
+        computeTargetSize();
         if (context->oformat->video_codec == AV_CODEC_ID_MPEG4) {
             context->oformat->video_codec = AV_CODEC_ID_H264;
         }
@@ -1376,13 +1635,13 @@ public:
             return ret;
     }
  
-    void computeTargetSize(AVCodecContext *sourceCodecContext) {
-        int w = sourceCodecContext->width;
-        int h = sourceCodecContext->height;
+    void computeTargetSize() {
+        int w = sourceWidth;
+        int h = sourceHeight;
 
         if (w < h) {
-            w = sourceCodecContext->height;
-            h = sourceCodecContext->width;
+            w = sourceHeight;
+            h = sourceWidth;
         }
 
         int cW = computeSize(w, 1080);
@@ -1396,7 +1655,7 @@ public:
         targetWidth = normalizeSize((int)(w * scale));
         targetHeight = normalizeSize((int)(h * scale));
 
-        if (sourceCodecContext->width < sourceCodecContext->height) {
+        if (sourceWidth < sourceHeight) {
             int temp = targetWidth;
             targetWidth = targetHeight;
             targetHeight = temp;
@@ -1413,6 +1672,12 @@ public:
     }
 
     void onInit() override {
+        const in::Message& message = in::Message::onInit();
+        messageQueue.push(message);
+
+    }
+
+    void doOnInit() {
         int ret;
         ret = avformat_alloc_output_context2(&context, nullptr, format.c_str(), targetPath.c_str());
         if (ret < 0) {
@@ -1421,30 +1686,42 @@ public:
     }
 
     void onAudioStream(AVCodecContext *sourceCodecContext) override {
-        sourceSample_rate = sourceCodecContext->sample_rate;
-        sourceLayout = sourceCodecContext->channel_layout;
-        sourceChannels = sourceCodecContext->channels;
-        sourceSampleFormat = sourceCodecContext->sample_fmt;
+        const in::Message &message = in::Message::onAudio(sourceCodecContext);
+        messageQueue.push(message);
+    }
+
+    void doOnAudioStream(const in::Message& msg) {
+        sourceSample_rate = msg.sourceSample_rate;
+        sourceLayout = msg.sourceLayout;
+        sourceChannels = msg.sourceChannels;
+        sourceSampleFormat = msg.sourceSampleFormat;
         __android_log_print(6, "AudioConverter", "onAudioStream %d, %d", sourceSample_rate, sourceSampleFormat);
-
         addAudio();
-
     }
 
     void onVideoStream(AVCodecContext *sourceCodecContext, AVStream* st) override {
-        sourceWidth = sourceCodecContext->width;
-        sourceHeight = sourceCodecContext->height;
-        sourceVideoTimebase = sourceCodecContext->pkt_timebase;
-        AVDictionaryEntry *pEntry = av_dict_get(st->metadata, "rotate", nullptr,
-                                                AV_DICT_MATCH_CASE);
-        if (pEntry != nullptr) {
-            sourceRotate = pEntry->value;
-        }
-        __android_log_print(6, "AudioConverter", "onVideoStream %d, %d, %d, %d", sourceWidth, sourceHeight, sourceCodecContext->time_base.num, sourceCodecContext->time_base.den);
-        addVideo(sourceCodecContext);
+        const in::Message &message = in::Message::onVideo(sourceCodecContext, st);
+        messageQueue.push(message);
+
+
+    }
+
+    void doOnVideoStream(const in::Message& msg) {
+        sourceWidth = msg.sourceWidth;
+        sourceHeight = msg.sourceHeight;
+        sourceVideoTimebase = msg.sourceVideoTimebase;
+        sourceRotate = msg.sourceRotate;
+        __android_log_print(6, "AudioConverter", "onVideoStream %d, %d", sourceWidth, sourceHeight);
+        addVideo();
     }
 
     void onStart() override {
+        const in::Message &message = in::Message::onStart();
+        messageQueue.push(message);
+    }
+
+    void doOnStart() {
+
         int ret;
 
         if (!(context->oformat->flags & AVFMT_NOFILE)) {
@@ -1458,23 +1735,56 @@ public:
         ret = avformat_write_header(context, &opt);
         if (ret < 0)
             throw ConvertException(std::string("create target: can't write header") + av_err2str(ret));
+
     }
 
     void onAudioFrame(AVFrame *audioFrame) override {
+        const in::Message &message = in::Message::onAudioFrame(audioFrame);
+        messageQueue.push(message);
 //        write_audio_frame_immediate(audioFrame);
+//        write_audio_frame(audioFrame);
+    }
+
+    void doOnAudioFrame(AVFrame *audioFrame) {
         write_audio_frame(audioFrame);
+        av_frame_unref(audioFrame);
+        av_frame_free(&audioFrame);
     }
 
     void onVideoFrame(AVFrame *pFrame) override {
+        const in::Message &message = in::Message::onVideoFrame(pFrame);
+        messageQueue.push(message);
+//        __android_log_print(6, "MediaConverter", "before write video");
+//        write_video_frame(pFrame);
+//        __android_log_print(6, "MediaConverter", "end write video");
+    }
+
+    void doOnVideoFrame(AVFrame *pFrame) {
         write_video_frame(pFrame);
+        av_frame_unref(pFrame);
+        av_frame_free(&pFrame);
     }
 
     void onEnd() override {
+        const in::Message &message = in::Message::onEnd();
+        messageQueue.push(message);
+
+    }
+
+    void doOnEnd() {
         write_audio_frame(nullptr);
         write_video_frame(nullptr);
         end();
     }
+    
+    void onException(const std::exception &e) override {
+        const in::Message &message = in::Message::onException(e);
+        messageQueue.push(message);
+    }
 
+    void doOnException(const std::exception& e) {
+
+    }
 };
 
 MediaConverter::MediaConverter(ProcessCallback* callback, const char *sourcePath, const char *targetPath, const char *format)
@@ -1487,14 +1797,16 @@ MediaConverter::~MediaConverter() noexcept = default;
 
 const char* MediaConverter::convert() {
     try {
-        inputStream->init();
+//        inputStream->init();
         inputStream->start();
+        target->loop();
 //        inputStream.reset();
 //        target.reset();
     } catch (std::exception& e) {
-//        __android_log_write(6, "AudioConverter", e.what());
+        __android_log_write(6, "AudioConverter", e.what());
         return e.what();
     }
+    inputStream->join();
 
     return nullptr;
 }
