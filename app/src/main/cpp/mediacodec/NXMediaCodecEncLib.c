@@ -331,6 +331,12 @@ static av_cold int android_hw_encode_init(AVCodecContext *avctx)
 		goto fail;
 	}
 
+	if (param.iColor == 21) {
+		avctx->pix_fmt = AV_PIX_FMT_NV12;
+	} else if (param.iColor == 19) {
+		avctx->pix_fmt = AV_PIX_FMT_YUV420P;
+	}
+
 //	YXLOGE( "option bitrate:[%s] frameRate:[%s] useInputsurface:[%s]", s->bitRate, s->frameRate, s->useinputsurface);
 
     if (1)//avctx->flags & CODEC_FLAG_GLOBAL_HEADER)
@@ -1236,9 +1242,9 @@ AVCodec ff_android_hw_h264_encoder = {
 //	.receive_packet  = android_hw_recive_packet,
     .close          = android_hw_encode_close,
 	.capabilities   = AV_CODEC_CAP_DELAY,
-    .pix_fmts       = (const enum AVPixelFormat[]){ AV_PIX_FMT_NV12,
+    .pix_fmts       = (const enum AVPixelFormat[]){AV_PIX_FMT_YUV420P,
+        											AV_PIX_FMT_NV12,
     												AV_PIX_FMT_NV21,
-    												AV_PIX_FMT_YUV420P,
     												AV_PIX_FMT_VIDEOTOOLBOX,
                                                     AV_PIX_FMT_NONE },
     .priv_class     = &class,

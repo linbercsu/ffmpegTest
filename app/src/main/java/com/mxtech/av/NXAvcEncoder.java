@@ -983,6 +983,14 @@ public class NXAvcEncoder {
 //            }
 
 
+            //prefer COLOR_FormatYUV420Planar
+            for (int i = 0; i < capabilities.colorFormats.length; i++) {
+                int colorFormat = capabilities.colorFormats[i];
+
+                if (MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar == colorFormat)
+                    return colorFormat;
+            }
+
             for (int i = 0; i < capabilities.colorFormats.length; i++) {
                 int colorFormat = capabilities.colorFormats[i];
 

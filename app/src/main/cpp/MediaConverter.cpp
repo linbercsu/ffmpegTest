@@ -18,6 +18,7 @@ extern "C" {
 #include <pthread.h>
 #include <mutex>
 #include <utility>
+#include "libyuv.h"
 
 #include "mediacodec/NXMediaCodecEncInterface.h"
 
@@ -254,6 +255,10 @@ private:
         } else {
             stream_index = ret;
             st = formatContext->streams[stream_index];
+            if (AVMEDIA_TYPE_VIDEO == type) {
+                st->codecpar->format = AV_PIX_FMT_YUV420P;
+
+            }
 
             /* find decoder for the stream */
             dec = avcodec_find_decoder(st->codecpar->codec_id);
@@ -362,6 +367,8 @@ public:
         height = video_dec_ctx->height;
         pix_fmt = video_dec_ctx->pix_fmt;
 
+        __android_log_print(6, "MediaConverter", "find video stream %d", pix_fmt);
+
         callback->onVideoStream(video_dec_ctx, video_stream);
     }
 
@@ -465,6 +472,18 @@ public:
             av_frame_free(&frameWrite);
         }
 
+        if (videoFrame != nullptr) {
+            av_frame_free(&videoFrame);
+        }
+
+        if (videoFrameRotate != nullptr) {
+            av_frame_free(&videoFrame);
+        }
+
+        if (videoFrameConvert != nullptr) {
+            av_frame_free(&videoFrameConvert);
+        }
+
         if (sws_ctx != nullptr) {
             sws_freeContext(sws_ctx);
             sws_ctx = nullptr;
@@ -511,18 +530,23 @@ private:
     AVCodecContext *videoCodecContext{};
     AVCodec *videoEncoder{};
     AVFrame *videoFrame{};
+    AVFrame *videoFrameRotate{};
+    AVFrame *videoFrameConvert{};
     AVFrame *tmpVideoFrame{};
+    bool preRotate{false};
     AVSampleFormat sourceSampleFormat = AV_SAMPLE_FMT_NONE;
     struct SwsContext *sws_ctx{};
     int64_t next_ptsVideo{0};
     int sourceWidth = 0;
     int sourceHeight = 0;
     int targetWidth{0};
+    int targetWidthTmp{0};
     int targetHeight{0};
+    int targetHeightTmp{0};
     AVRational sourceVideoTimebase{};
     int64_t firstVideoPts{-1};
     bool firstVideoPtsGot{false};
-    const char* sourceRotate = nullptr;
+    std::string sourceRotate{};
 public:
     /*
      * useless
@@ -578,6 +602,8 @@ public:
         avcodec_free_context(&videoCodecContext);
         av_frame_free(&frame);
         av_frame_free(&videoFrame);
+        av_frame_free(&videoFrameRotate);
+        av_frame_free(&videoFrameConvert);
         av_frame_free(&tmpVideoFrame);
         sws_freeContext(sws_ctx);
         swr_free(&swr_ctx);
@@ -591,6 +617,9 @@ public:
         context = nullptr;
         codecContext = nullptr;
         frame = nullptr;
+        videoFrame = nullptr;
+        videoFrameRotate = nullptr;
+        videoFrameConvert = nullptr;
         swr_ctx = nullptr;
         sws_ctx = nullptr;
     }
@@ -798,7 +827,10 @@ public:
         }
 
         /* allocate and init a re-usable frame */
-        videoFrame = alloc_picture(c->pix_fmt, c->width, c->height);
+//        videoFrame = alloc_picture(c->pix_fmt, targetWidthTmp, targetHeightTmp);
+//        videoFrame = alloc_picture(AV_PIX_FMT_YUV420P, targetWidthTmp, targetHeightTmp);
+//        videoFrameRotate = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
+
 
         tmpVideoFrame = nullptr;
 
@@ -808,9 +840,9 @@ public:
             throw ConvertException(std::string("encode error: Could not copy the video stream parameters: ") + av_err2str(ret));
         }
 
-        if (sourceRotate != nullptr) {
-            av_dict_set(&videoStream->metadata, "rotate", sourceRotate, 0);
-        }
+//        if (!sourceRotate.empty()) {
+//            av_dict_set(&videoStream->metadata, "rotate", sourceRotate.c_str(), 0);
+//        }
 
     }
 
@@ -1024,22 +1056,35 @@ public:
         int64_t p = pFrame->pts - firstVideoPts;
 
         AVCodecContext *c = videoCodecContext;
-//        __android_log_print(6, "AudioConverter", "write video %d, %d, %d, %d, %d, %d", pFrame->format, pFrame->width, pFrame->height, c->pix_fmt, c->width, c->height);
+//        __android_log_print(6, "MediaConverter", "write video %d, %d", pFrame->format, c->pix_fmt);
         int ret;
 
         /* when we pass a frame to the encoder, it may keep a reference to it
          * internally; make sure we do not overwrite it here */
-        if ((ret = av_frame_make_writable(videoFrame)) < 0)
-            throw ConvertException(std::string("encode error: av_frame_make_writable video error: ") + av_err2str(ret));
+//        if ((ret = av_frame_make_writable(videoFrame)) < 0)
+//            throw ConvertException(std::string("encode error: av_frame_make_writable video error: ") + av_err2str(ret));
 
-        if (c->pix_fmt != pFrame->format || c->width != pFrame->width || c->height != pFrame->height) {
+//        if (c->pix_fmt != pFrame->format || targetWidthTmp != pFrame->width || targetHeightTmp != pFrame->height) {
+        {
+            if (videoFrame == nullptr) {
+                if (sourceRotate.empty()) {
+                    videoFrame = alloc_picture(c->pix_fmt, targetWidthTmp, targetHeightTmp);
+                } else {
+                    videoFrame = alloc_picture(AV_PIX_FMT_YUV420P, targetWidthTmp, targetHeightTmp);
+                }
+
+                if ((ret = av_frame_make_writable(videoFrame)) < 0)
+                    throw ConvertException(std::string("encode error: av_frame_make_writable video error: ") + av_err2str(ret));
+
+            }
+
             /* as we only generate a YUV420P picture, we must convert it
              * to the codec pixel format if needed */
             if (!sws_ctx) {
                 sws_ctx = sws_getContext(pFrame->width, pFrame->height,
                                          (enum AVPixelFormat)pFrame->format,
-                                              c->width, c->height,
-                                              c->pix_fmt,
+                                         targetWidthTmp, targetHeightTmp,
+                                         (enum AVPixelFormat)videoFrame->format,
                                               SCALE_FLAGS, nullptr, nullptr, nullptr);
                 if (!sws_ctx) {
                     throw ConvertException("Could not initialize the sws conversion context");
@@ -1047,23 +1092,104 @@ public:
             }
 
 //            fill_yuv_image(ost->tmp_frame, ost->next_pts, c->width, c->height);
+            __android_log_print(6, "AudioConverter", "scale");
             sws_scale(sws_ctx, pFrame->data,
                         pFrame->linesize, 0, pFrame->height, videoFrame->data,
                       videoFrame->linesize);
 
-//            videoFrame->pts = ++next_ptsVideo;
-
-            videoFrame->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
+            if (sourceRotate.empty()) {
+                videoFrame->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
+//            __android_log_print(6, "AudioConverter", "video pts: %ld, %ld, %ld, %ld, %d, %d, %d, %d", videoFrame->pts, p, pFrame->pts, firstVideoPts, c->time_base.num, c->time_base.den, sourceVideoTimebase.num, sourceVideoTimebase.den);
+                write_frame(videoCodecContext, videoStream, videoFrame);
+            } else {
+                __android_log_print(6, "AudioConverter", "rotate");
+                AVFrame* rotated = rotateVideo(videoFrame);
+                __android_log_print(6, "AudioConverter", "convert");
+                AVFrame* converted = convertVideo(rotated);
+                __android_log_print(6, "AudioConverter", "convert end");
+                converted->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
 
 //            __android_log_print(6, "AudioConverter", "video pts: %ld, %ld, %ld, %ld, %d, %d, %d, %d", videoFrame->pts, p, pFrame->pts, firstVideoPts, c->time_base.num, c->time_base.den, sourceVideoTimebase.num, sourceVideoTimebase.den);
-            write_frame(videoCodecContext, videoStream, videoFrame);
-        } else {
+                write_frame(videoCodecContext, videoStream, converted);
+            }
 
-//            pFrame->pts = ++next_ptsVideo;
-            pFrame->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
-            write_frame(videoCodecContext, videoStream, pFrame);
-//            fill_yuv_image(ost->frame, ost->next_pts, c->width, c->height);
         }
+//        else {
+
+//            pFrame->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
+//            write_frame(videoCodecContext, videoStream, pFrame);
+//        }
+    }
+
+    /*
+     * now we only support AV_PIX_FMT_YUV420P rotate
+     */
+    AVFrame* rotateVideo(AVFrame *pFrame) {
+        if (sourceRotate.empty())
+            return pFrame;
+        libyuv::RotationModeEnum mode = {};
+        if (sourceRotate == "90") {
+            mode = libyuv::kRotate90;
+        } else if (sourceRotate == "180") {
+            mode = libyuv::kRotate180;
+        } else if (sourceRotate == "270"){
+            mode = libyuv::kRotate270;
+        } else {
+            return pFrame;
+        }
+
+        if (pFrame->format == AV_PIX_FMT_YUV420P) {
+            if (videoFrameRotate == nullptr)
+                videoFrameRotate = alloc_picture(AV_PIX_FMT_YUV420P, videoCodecContext->width, videoCodecContext->height);
+
+            if ((av_frame_make_writable(videoFrameRotate)) < 0)
+                throw ConvertException(std::string("encode error: av_frame_make_writable rotate video error: "));
+
+
+            libyuv::I420Rotate(pFrame->data[0], pFrame->linesize[0],
+                               pFrame->data[1], pFrame->linesize[1],
+                               pFrame->data[2], pFrame->linesize[2],
+
+                               videoFrameRotate->data[0], videoFrameRotate->linesize[0],
+                               videoFrameRotate->data[1], videoFrameRotate->linesize[1],
+                               videoFrameRotate->data[2], videoFrameRotate->linesize[2],
+
+                               pFrame->width,
+                               pFrame->height,
+                               mode
+            );
+        } else {
+            return pFrame;
+        }
+
+        return videoFrameRotate;
+    }
+
+    AVFrame* convertVideo(AVFrame* pFrame) {
+        if (videoCodecContext->pix_fmt == AV_PIX_FMT_YUV420P)
+            return pFrame;
+
+        //we only android mediacodec, on it pix_fmt only can be one of AV_PIX_FMT_YUV420P, AV_PIX_FMT_NV12
+        if (videoFrameConvert == nullptr) {
+            videoFrameConvert = alloc_picture(AV_PIX_FMT_NV12, videoCodecContext->width, videoCodecContext->height);
+        }
+
+        if ((av_frame_make_writable(videoFrameConvert)) < 0)
+            throw ConvertException(std::string("encode error: av_frame_make_writable convert video error: "));
+
+
+        libyuv::I420ToNV12(pFrame->data[0], pFrame->linesize[0],
+                           pFrame->data[1], pFrame->linesize[1],
+                           pFrame->data[2], pFrame->linesize[2],
+
+                           videoFrameConvert->data[0], videoFrameConvert->linesize[0],
+                           videoFrameConvert->data[1], videoFrameConvert->linesize[1],
+                           pFrame->width,
+                           pFrame->height
+
+        );
+
+        return videoFrameConvert;
     }
 
     void write_frame(AVCodecContext *c, AVStream *st, AVFrame *pFrame) {
@@ -1145,6 +1271,15 @@ public:
         targetHeight = normalizeSize((int)(h * scale));
 
         if (sourceCodecContext->width < sourceCodecContext->height) {
+            int temp = targetWidth;
+            targetWidth = targetHeight;
+            targetHeight = temp;
+        }
+
+        targetWidthTmp = targetWidth;
+        targetHeightTmp = targetHeight;
+
+        if (sourceRotate == "90" || sourceRotate == "270") {
             int temp = targetWidth;
             targetWidth = targetHeight;
             targetHeight = temp;

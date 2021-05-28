@@ -9,6 +9,8 @@ cmake_minimum_required(VERSION 3.10.2)
 
 project("myapplication")
 
+add_subdirectory(libyuv)
+
 add_compile_options(-Wno-deprecated-declarations)
 add_compile_options(-Wno-unused-variable)
 add_compile_options(-Wno-unused-function)
@@ -72,6 +74,7 @@ INCLUDE_DIRECTORIES(
         ${CMAKE_SOURCE_DIR}
 #        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/include
         ${CMAKE_SOURCE_DIR}/ffmpeg
+        ${CMAKE_SOURCE_DIR}/libyuv/include
 )
 
 # Searches for a specified prebuilt library and stores the path as a
@@ -106,5 +109,5 @@ target_link_libraries( # Specifies the target library.
                        # included in the NDK.
                        ${log-lib}
                        ${z-lib}
-
+        yuv
         )
