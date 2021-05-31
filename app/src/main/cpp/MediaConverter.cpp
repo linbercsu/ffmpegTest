@@ -11,6 +11,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
+#include "libavcodec/jni.h"
 }
 
 #include <android/log.h>
@@ -165,6 +166,7 @@ private:
     }
 
     void output_video_frame(AVFrame *pFrame) {
+//        __android_log_print(6, "MediaConverter", "on video frame %ld", pFrame->pts);
         callback->onVideoFrame(pFrame);
     }
 
@@ -206,15 +208,51 @@ private:
     }
     int decode_packet_video(AVCodecContext *dec, const AVPacket *package) {
         int ret;
-
-        // submit the packet to the decoder
         ret = avcodec_send_packet(dec, package);
-        if (ret < 0) {
 
+//        __android_log_print(6, "MediaConverter", "on video pkt %ld %d", package->pts, ret);
+        if (ret != AVERROR(EAGAIN) && ret < 0) {
             throw ConvertException(std::string("decode error: Error submitting a packet for decoding: ") + av_err2str(ret));
-//            fprintf(stderr, "Error submitting a packet for decoding (%s)\n", av_err2str(ret));
         }
 
+
+        while (ret == AVERROR(EAGAIN)) {
+            while (true) {
+                ret = avcodec_receive_frame(dec, videoFrame);
+                if (ret < 0) {
+                    if (ret == AVERROR_EOF)
+                        return 0;
+
+                    if (ret == AVERROR(EAGAIN)) {
+                        ret = avcodec_send_packet(dec, package);
+                        if (ret == 0)
+                            break;
+
+                        if (ret < 0 && ret != AVERROR(EAGAIN))
+                            throw ConvertException(
+                                    std::string("decode error: Error during decoding 1: ") +
+                                    av_err2str(ret));
+                        continue;
+                    }
+
+                    throw ConvertException(std::string("decode error: Error during decoding: ") + av_err2str(ret));
+                }
+
+                output_video_frame(videoFrame);
+
+                av_frame_unref(videoFrame);
+                ret = avcodec_send_packet(dec, package);
+                break;
+            }
+        }
+
+        if (ret < 0 && ret != AVERROR(EAGAIN))
+            throw ConvertException(
+                    std::string("decode error: Error during decoding 2: ") +
+                    av_err2str(ret));
+
+
+        ret = 0;
         // get all the available frames from the decoder
         while (ret >= 0) {
             ret = avcodec_receive_frame(dec, videoFrame);
@@ -261,7 +299,29 @@ private:
             }
 
             /* find decoder for the stream */
-            dec = avcodec_find_decoder(st->codecpar->codec_id);
+            if (st->codecpar->codec_id == AV_CODEC_ID_H264) {
+
+                dec = avcodec_find_decoder_by_name("h264_mediacodec");
+//                    dec = &ff_android_hw_h264_decoder;
+
+//                int i;
+//                for (i = 0;; i++) {
+//                    const AVCodecHWConfig *config = avcodec_get_hw_config(dec, i);
+//                    if (!config) {
+//                        fprintf(stderr, "Decoder %s does not support device type %s.\n",
+//                                dec->name, av_hwdevice_get_type_name(dType));
+//                        throw ConvertException("Decoder does not support device type");
+//                    }
+//                    if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+//                        config->device_type == dType) {
+//                        hw_pix_fmt = config->pix_fmt;
+//                        break;
+//                    }
+//                }
+
+            } else {
+                dec = avcodec_find_decoder(st->codecpar->codec_id);
+            }
             if (!dec) {
 //                fprintf(stderr, "Failed to find %s codec\n",
 //                        av_get_media_type_string(type));
@@ -1089,7 +1149,7 @@ public:
 //                __android_log_print(6, "AudioConverter", "convert end");
                 converted->pts = av_rescale_q(p, sourceVideoTimebase, c->time_base);
 
-//            __android_log_print(6, "AudioConverter", "video pts: %ld, %ld, %ld, %ld, %d, %d, %d, %d", videoFrame->pts, p, pFrame->pts, firstVideoPts, c->time_base.num, c->time_base.den, sourceVideoTimebase.num, sourceVideoTimebase.den);
+//            __android_log_print(6, "AudioConverter", "video pts: %ld, %d, %d, %d, %d", p, sourceVideoTimebase.num, sourceVideoTimebase.den, c->time_base.num, c->time_base.den);
                 write_frame(videoCodecContext, videoStream, converted);
 //            }
 
@@ -1546,6 +1606,11 @@ static void nativeRelease(JNIEnv* /*env*/,
     delete converter;
 }
 
+static void av_log_my_callback(void* ptr, int level, const char* fmt, va_list vl)
+{
+    AVClass* avc = ptr ? *(AVClass **) ptr : nullptr;
+    __android_log_print(6, avc ? avc->class_name : "mediaConverter", fmt, vl);
+}
 
 static const JNINativeMethod methods[] =
         {
@@ -1556,11 +1621,13 @@ static const JNINativeMethod methods[] =
         };
 
 void MediaConverter::initClass(JNIEnv *env, jclass clazz) {
+//    av_log_set_callback(&av_log_my_callback);
     env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
     JavaProgressCallback::init(env, clazz);
     JavaVM* vm = nullptr;
     env->GetJavaVM(&vm);
     jint version = env->GetVersion();
+    av_jni_set_java_vm(vm, nullptr);
     __android_log_print(6, "MediaConverter", "initClass %d", version);
     YX_AMediaCodec_Enc_loadClassEnv(vm, version);
 //    JavaProgressCallback::progressMethod = env->GetMethodID(clazz, "onProgress", "(I)V");

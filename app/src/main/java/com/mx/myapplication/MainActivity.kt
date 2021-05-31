@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
 //        textView.text = stringFromJNI()
 //        Log.e("test", "test: max: ${max()}")
 
-            audioConverter = AsyncMediaConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mp4", "mp4") {
+            audioConverter = AsyncMediaConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mpd", "dash") {
 
 
             }

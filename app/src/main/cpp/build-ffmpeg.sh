@@ -86,7 +86,9 @@ configure() {
     --disable-ffprobe \
     --enable-gpl \
     --enable-pic \
-    --enable-libmp3lame
+    --enable-libmp3lame \
+    --enable-jni \
+    --enable-mediacodec \
 
 }
 
