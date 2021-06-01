@@ -119,6 +119,11 @@ private:
             audio_dec_ctx = nullptr;
         }
 
+        if (video_dec_ctx != nullptr) {
+            avcodec_free_context(&video_dec_ctx);
+            video_dec_ctx = nullptr;
+        }
+
         if (fmt_ctx != nullptr) {
             avformat_close_input(&fmt_ctx);
             fmt_ctx = nullptr;
@@ -132,6 +137,10 @@ private:
         if (frame != nullptr) {
             av_frame_free(&frame);
             frame = nullptr;
+        }
+        if (videoFrame != nullptr) {
+            av_frame_free(&videoFrame);
+            videoFrame = nullptr;
         }
     }
 
@@ -521,6 +530,9 @@ public:
         if (codecContext != nullptr)
             avcodec_free_context(&codecContext);
 
+        if (videoCodecContext != nullptr)
+            avcodec_free_context(&videoCodecContext);
+
         if (frame != nullptr)
             av_frame_free(&frame);
 
@@ -596,7 +608,6 @@ private:
     AVFrame *videoFrameScale{};
     AVFrame *videoFrameRotate{};
     AVFrame *videoFrameConvert{};
-    AVFrame *tmpVideoFrame{};
     bool preRotate{false};
     AVSampleFormat sourceSampleFormat = AV_SAMPLE_FMT_NONE;
     struct SwsContext *sws_ctx{};
@@ -665,11 +676,12 @@ public:
         avcodec_free_context(&codecContext);
         avcodec_free_context(&videoCodecContext);
         av_frame_free(&frame);
+        av_frame_free(&frame1);
+        av_frame_free(&frameWrite);
         av_frame_free(&videoFrame);
         av_frame_free(&videoFrameRotate);
         av_frame_free(&videoFrameConvert);
         av_frame_free(&videoFrameScale);
-        av_frame_free(&tmpVideoFrame);
         sws_freeContext(sws_ctx);
         swr_free(&swr_ctx);
 
@@ -682,9 +694,12 @@ public:
         context = nullptr;
         codecContext = nullptr;
         frame = nullptr;
+        frame1 = nullptr;
+        frameWrite = nullptr;
         videoFrame = nullptr;
         videoFrameRotate = nullptr;
         videoFrameConvert = nullptr;
+        videoFrameScale = nullptr;
         swr_ctx = nullptr;
         sws_ctx = nullptr;
     }
@@ -896,8 +911,6 @@ public:
 //        videoFrame = alloc_picture(AV_PIX_FMT_YUV420P, targetWidthTmp, targetHeightTmp);
 //        videoFrameRotate = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
 
-
-        tmpVideoFrame = nullptr;
 
         /* copy the stream parameters to the muxer */
         ret = avcodec_parameters_from_context(videoStream->codecpar, c);
@@ -1530,8 +1543,10 @@ public:
     }
 
     void onEnd() override {
-        write_audio_frame(nullptr);
-        write_video_frame(nullptr);
+        if (encoder)
+            write_audio_frame(nullptr);
+        if (videoEncoder)
+            write_video_frame(nullptr);
         end();
     }
 
