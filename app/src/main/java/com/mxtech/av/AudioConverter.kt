@@ -1,6 +1,4 @@
-package com.mxtech.audio
-
-import android.util.Log
+package com.mxtech.av
 
 class AudioConverter(source: String, target: String, format: String, private val progress: (Int)->Unit) {
     private var ptr: Long

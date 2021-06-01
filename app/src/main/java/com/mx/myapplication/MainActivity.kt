@@ -5,14 +5,14 @@ import android.content.Intent
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
 import android.widget.TextView
-import com.mxtech.audio.AsyncAudioConverter
+import com.mxtech.av.AsyncAudioConverter
 import com.mxtech.av.AsyncMediaConverter
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var audioConverter: AsyncMediaConverter
+    private lateinit var converter: AsyncAudioConverter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +29,13 @@ class MainActivity : AppCompatActivity() {
             }
 
         audioConverter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+//
+//            converter = AsyncAudioConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mp3", "mp3") {
+//
+//
+//            }
+//
+//        converter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
 
         textView.setOnClickListener {
             audioConverter.stop()
