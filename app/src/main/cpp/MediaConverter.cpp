@@ -345,7 +345,7 @@ namespace {
 
             ret = av_find_best_stream(formatContext, type, -1, -1, nullptr, 0);
             if (ret < 0) {
-                throw ConvertException("audio stream not found.");
+                return;
 //            fprintf(stderr, "Could not find %s stream in input file '%s'\n",
 //                    av_get_media_type_string(type), src_filename);
 //            return ret;
@@ -362,30 +362,11 @@ namespace {
 
                     dec = avcodec_find_decoder_by_name("h264_mediacodec");
 //                    dec = &ff_android_hw_h264_decoder;
-
-//                int i;
-//                for (i = 0;; i++) {
-//                    const AVCodecHWConfig *config = avcodec_get_hw_config(dec, i);
-//                    if (!config) {
-//                        fprintf(stderr, "Decoder %s does not support device type %s.\n",
-//                                dec->name, av_hwdevice_get_type_name(dType));
-//                        throw ConvertException("Decoder does not support device type");
-//                    }
-//                    if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
-//                        config->device_type == dType) {
-//                        hw_pix_fmt = config->pix_fmt;
-//                        break;
-//                    }
-//                }
-
                 } else {
                     dec = avcodec_find_decoder(st->codecpar->codec_id);
                 }
                 if (!dec) {
-//                fprintf(stderr, "Failed to find %s codec\n",
-//                        av_get_media_type_string(type));
                     throw ConvertException("decode error: Failed to find codec");
-//                return AVERROR(EINVAL);
                 }
 
                 /* Allocate a codec context for the decoder */
@@ -452,49 +433,48 @@ namespace {
             callback->onInit();
 
             open_codec_context(&audio_stream_idx, &audio_dec_ctx, fmt_ctx, AVMEDIA_TYPE_AUDIO);
-            audio_stream = fmt_ctx->streams[audio_stream_idx];
-
-            duration = audio_stream->duration;
-
-            /* dump input information to stderr */
-//        av_dump_format(fmt_ctx, 0, src_filename, 0);
-
-            frame = av_frame_alloc();
-            if (!frame) {
-//            fprintf(stderr, "Could not allocate frame\n");
-//            AVERROR(ENOMEM);
-                throw ConvertException("memory error: Could not allocate frame");
-            }
 
             pkt = av_packet_alloc();
             if (!pkt) {
-//            fprintf(stderr, "Could not allocate packet\n");
-//            ret = AVERROR(ENOMEM);
                 throw ConvertException("memory error: Could not allocate packet");
             }
 
-            callback->onAudioStream(audio_dec_ctx);
+            if (audio_stream_idx != -1) {
+                audio_stream = fmt_ctx->streams[audio_stream_idx];
+                duration = audio_stream->duration;
 
-            //open video stream
-            videoFrame = av_frame_alloc();
-            if (!videoFrame) {
-                throw ConvertException("memory error: Could not allocate frame");
+                frame = av_frame_alloc();
+                if (!frame) {
+                    throw ConvertException("memory error: Could not allocate frame");
+                }
+
+                callback->onAudioStream(audio_dec_ctx);
             }
 
             open_codec_context(&video_stream_idx, &video_dec_ctx, fmt_ctx, AVMEDIA_TYPE_VIDEO);
-            video_stream = fmt_ctx->streams[video_stream_idx];
+            if (video_stream_idx != -1) {
+                videoFrame = av_frame_alloc();
+                if (!videoFrame) {
+                    throw ConvertException("memory error: Could not allocate frame");
+                }
 
-            video_dec_ctx->pkt_timebase = video_stream->time_base;
+                video_stream = fmt_ctx->streams[video_stream_idx];
 
+                video_dec_ctx->pkt_timebase = video_stream->time_base;
 
-            /* allocate image where the decoded image will be put */
-            width = video_dec_ctx->width;
-            height = video_dec_ctx->height;
-            pix_fmt = video_dec_ctx->pix_fmt;
+                /* allocate image where the decoded image will be put */
+                width = video_dec_ctx->width;
+                height = video_dec_ctx->height;
+                pix_fmt = video_dec_ctx->pix_fmt;
 
-            __android_log_print(6, "MediaConverter", "find video stream %d", pix_fmt);
+                __android_log_print(6, "MediaConverter", "find video stream %d", pix_fmt);
 
-            callback->onVideoStream(video_dec_ctx, video_stream);
+                callback->onVideoStream(video_dec_ctx, video_stream);
+            }
+
+            if (audio_stream_idx == -1 && video_stream_idx == -1) {
+                throw ConvertException("no stream error");
+            }
         }
 
         void start() {
