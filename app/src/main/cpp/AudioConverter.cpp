@@ -432,6 +432,11 @@ namespace {
             audio_stream = fmt_ctx->streams[audio_stream_idx];
 
             duration = audio_stream->duration;
+            if (duration < 0) {
+                duration = av_rescale_q(fmt_ctx->duration,
+                                           AV_TIME_BASE_Q,
+                                           audio_stream->time_base);
+            }
 
             /* dump input information to stderr */
 //        av_dump_format(fmt_ctx, 0, src_filename, 0);
