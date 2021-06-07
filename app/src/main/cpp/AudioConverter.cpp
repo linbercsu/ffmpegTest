@@ -229,6 +229,7 @@ namespace {
             }
 
             if (pkt != nullptr) {
+                av_packet_unref(pkt);
                 av_packet_free(&pkt);
                 pkt = nullptr;
             }
@@ -271,10 +272,10 @@ namespace {
             // submit the packet to the decoder
             ret = avcodec_send_packet(dec, package);
             if (ret < 0) {
-
-                throw ConvertException(
-                        std::string("decode error: Error submitting a packet for decoding: ") +
-                        av_err2str(ret));
+                return ret;
+//                throw ConvertException(
+//                        std::string("decode error: Error submitting a packet for decoding: ") +
+//                        av_err2str(ret));
 //            fprintf(stderr, "Error submitting a packet for decoding (%s)\n", av_err2str(ret));
             }
 
@@ -287,8 +288,9 @@ namespace {
                     if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
                         return 0;
 
-                    throw ConvertException(
-                            std::string("decode error: Error during decoding: ") + av_err2str(ret));
+                    return ret;
+//                    throw ConvertException(
+//                            std::string("decode error: Error during decoding: ") + av_err2str(ret));
 //                fprintf(stderr, "Error during decoding (%s)\n", av_err2str(ret));
 //                return ret;
                 }
@@ -458,6 +460,7 @@ namespace {
 //            printf("Demuxing audio from file '%s' into '%s'\n", src_filename, audio_dst_filename);
 
             /* read frames from the file */
+            int progress = 0;
             while (!isStopped() && av_read_frame(fmt_ctx, pkt) >= 0) {
                 // check if the packet belongs to a stream we are interested in, otherwise
                 // skip it
@@ -468,13 +471,19 @@ namespace {
                     ret = decode_packet(audio_dec_ctx, pkt);
 
                     if (ret >= 0) {
-                        int progress = pkt->pts * 100 / duration;
+                        progress = pkt->pts * 100 / duration;
                         processCallback->onProgress(progress);
                     }
                 }
                 av_packet_unref(pkt);
-                if (ret < 0)
-                    break;
+                if (ret < 0) {
+                    if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN) || progress > 90)
+                        break;
+                    else {
+                        throw ConvertException(std::string("decode error: ") + av_err2str(ret));
+                    }
+                }
+
             }
 
             if (isStopped()) {
@@ -990,6 +999,11 @@ namespace {
         delete converter;
     }
 
+    void av_log_my_callback(void *ptr, int level, const char *fmt, va_list vl) {
+        AVClass *avc = ptr ? *(AVClass **) ptr : nullptr;
+        __android_log_vprint(6, avc ? avc->class_name : "mediaConverter", fmt, vl);
+    }
+
 
     const JNINativeMethod methods[] =
             {
@@ -1000,6 +1014,7 @@ namespace {
             };
 
     void AudioConverter::initClass(JNIEnv *env, jclass clazz) {
+//            av_log_set_callback(&av_log_my_callback);
         env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
         JavaProgressCallback::init(env, clazz);
 //    if ( env->ExceptionCheck() )
