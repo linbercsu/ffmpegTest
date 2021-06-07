@@ -119,6 +119,91 @@ namespace {
         virtual void onEnd() = 0;
     };
 
+    AVFrame *alloc_audio_frame(enum AVSampleFormat sample_fmt,
+                                      uint64_t channel_layout,
+                                      int sample_rate, int nb_samples) {
+        AVFrame *frame = av_frame_alloc();
+        int ret;
+
+        if (!frame) {
+//        fprintf(stderr, "Error allocating an audio frame\n");
+//        exit(1);
+            throw ConvertException("memory error: Error allocating an audio frame");
+        }
+
+        frame->format = sample_fmt;
+        frame->channel_layout = channel_layout;
+        frame->sample_rate = sample_rate;
+        frame->nb_samples = nb_samples;
+
+        if (nb_samples) {
+            ret = av_frame_get_buffer(frame, 0);
+            if (ret < 0) {
+//            fprintf(stderr, "Error allocating an audio buffer\n");
+//            exit(1);
+                throw ConvertException("memory error: Error allocating an audio buffer");
+            }
+        }
+
+        return frame;
+    }
+
+    class AudioFrameBuffer {
+
+    public:
+        AVFrame* buffer = {nullptr};
+        AVFrame* bufferTmp = {nullptr};
+        int SIZE = 1024 * 8;
+        int count = 0;
+
+        ~AudioFrameBuffer() {
+            if (buffer != nullptr) {
+                av_frame_free(&buffer);
+                av_frame_free(&bufferTmp);
+            }
+        }
+
+        void sendFrame(AVFrame* pFrame, int pCount) {
+            if (buffer == nullptr) {
+                buffer = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                bufferTmp = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+            }
+
+            av_frame_make_writable(buffer);
+            av_frame_make_writable(bufferTmp);
+
+            if (pCount + count > SIZE) {
+                throw ConvertException("buffer internal error");
+            }
+
+            memcpy(buffer->data[0] + count * 4, pFrame->data[0], pCount * 4);
+            memcpy(buffer->data[1] + count * 4, pFrame->data[1], pCount * 4);
+            count += pCount;
+        }
+
+        int receiveFrame(AVFrame* out, int pCount) {
+            if (count < pCount)
+                return AVERROR(EAGAIN);
+
+            out->nb_samples = pCount;
+            memcpy(out->data[0], buffer->data[0], pCount * 4);
+            memcpy(out->data[1], buffer->data[1], pCount * 4);
+
+            int remain = count - pCount;
+            count = remain;
+            if (remain == 0) {
+                return 0;
+            }
+
+            memcpy(bufferTmp->data[0], buffer->data[0] + pCount * 4, remain * 4);
+            memcpy(bufferTmp->data[1], buffer->data[1] + pCount * 4, remain * 4);
+
+            memcpy(buffer->data[0], bufferTmp->data[0], remain * 4);
+            memcpy(buffer->data[1], bufferTmp->data[1], remain * 4);
+            return 0;
+        }
+    };
+
     class InputStream {
 
     public:
@@ -472,7 +557,7 @@ namespace {
     private:
         std::string targetPath;
         std::string format;
-
+        AudioFrameBuffer audioFrameBuffer{};
         AVFormatContext *context{};
         AVStream *stream{};
         AVCodecContext *codecContext{};
@@ -640,12 +725,15 @@ namespace {
 //        /* increment frequency by 110 Hz per second */
 //        ost->tincr2 = 2 * M_PI * 110.0 / c->sample_rate / c->sample_rate;
 
-            if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
-                nb_samples = 10000;
-            else {
-                nb_samples = c->frame_size;
 
-            }
+//            if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
+//                nb_samples = 10000;
+//            else {
+//                nb_samples = c->frame_size;
+
+
+//            }
+            nb_samples = 1024 * 8;
 
 
             ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
@@ -687,35 +775,6 @@ namespace {
 //        fprintf(stderr, "Failed to initialize the resampling context\n");
 //        exit(1);
             }
-        }
-
-        static AVFrame *alloc_audio_frame(enum AVSampleFormat sample_fmt,
-                                          uint64_t channel_layout,
-                                          int sample_rate, int nb_samples) {
-            AVFrame *frame = av_frame_alloc();
-            int ret;
-
-            if (!frame) {
-//        fprintf(stderr, "Error allocating an audio frame\n");
-//        exit(1);
-                throw ConvertException("memory error: Error allocating an audio frame");
-            }
-
-            frame->format = sample_fmt;
-            frame->channel_layout = channel_layout;
-            frame->sample_rate = sample_rate;
-            frame->nb_samples = nb_samples;
-
-            if (nb_samples) {
-                ret = av_frame_get_buffer(frame, 0);
-                if (ret < 0) {
-//            fprintf(stderr, "Error allocating an audio buffer\n");
-//            exit(1);
-                    throw ConvertException("memory error: Error allocating an audio buffer");
-                }
-            }
-
-            return frame;
         }
 
         /*
@@ -765,17 +824,31 @@ namespace {
 //            fprintf(stderr, "Error while converting\n");
 //            exit(1);
                 }
-                audioFrame = frame;
+//                audioFrame = frame;
                 frame->nb_samples = ret;
 
-                audioFrame->pts = av_rescale_q(samples_count,
-                                               (AVRational) {1, codecContext->sample_rate},
-                                               codecContext->time_base);
-//            samples_count += dst_nb_samples;
-                samples_count += ret;
-            }
+                audioFrameBuffer.sendFrame(frame, ret);
 
-            write_frame(audioFrame);
+                ret = audioFrameBuffer.receiveFrame(frame, codecContext->frame_size);
+                while (ret >= 0) {
+                    int64_t pts = av_rescale_q(samples_count,
+                                                   (AVRational) {1, codecContext->sample_rate},
+                                                   codecContext->time_base);
+
+                    frame->pts = pts;
+                    samples_count += frame->nb_samples;
+
+                    write_frame(frame);
+                    av_frame_make_writable(frame);
+                    ret = audioFrameBuffer.receiveFrame(frame, codecContext->frame_size);
+                }
+
+//                audioFrame->pts = av_rescale_q(samples_count,
+//                                               (AVRational) {1, codecContext->sample_rate},
+//                                               codecContext->time_base);
+//                samples_count += ret;
+            } else
+                write_frame(audioFrame);
         }
 
         void write_frame(AVFrame *pFrame) {
