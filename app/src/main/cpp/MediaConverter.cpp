@@ -141,6 +141,87 @@ namespace {
         virtual void onEnd() = 0;
     };
 
+    AVFrame *alloc_audio_frame(enum AVSampleFormat sample_fmt,
+                                      uint64_t channel_layout,
+                                      int sample_rate, int nb_samples) {
+        AVFrame *frame = av_frame_alloc();
+        int ret;
+
+        if (!frame) {
+            throw ConvertException("memory error: Error allocating an audio frame");
+        }
+
+        frame->format = sample_fmt;
+        frame->channel_layout = channel_layout;
+        frame->sample_rate = sample_rate;
+        frame->nb_samples = nb_samples;
+
+        if (nb_samples) {
+            ret = av_frame_get_buffer(frame, 0);
+            if (ret < 0) {
+                throw ConvertException("memory error: Error allocating an audio buffer");
+            }
+        }
+
+        return frame;
+    }
+
+    class AudioFrameBuffer {
+
+    public:
+        AVFrame* buffer = {nullptr};
+        AVFrame* bufferTmp = {nullptr};
+        int SIZE = 1024 * 8;
+        int count = 0;
+
+        ~AudioFrameBuffer() {
+            if (buffer != nullptr) {
+                av_frame_free(&buffer);
+                av_frame_free(&bufferTmp);
+            }
+        }
+
+        void sendFrame(AVFrame* pFrame, int pCount) {
+            if (buffer == nullptr) {
+                buffer = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                bufferTmp = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+            }
+
+            av_frame_make_writable(buffer);
+            av_frame_make_writable(bufferTmp);
+
+            if (pCount + count > SIZE) {
+                throw ConvertException("buffer internal error");
+            }
+
+            memcpy(buffer->data[0] + count * 4, pFrame->data[0], pCount * 4);
+            memcpy(buffer->data[1] + count * 4, pFrame->data[1], pCount * 4);
+            count += pCount;
+        }
+
+        int receiveFrame(AVFrame* out, int pCount) {
+            if (count < pCount)
+                return AVERROR(EAGAIN);
+
+            out->nb_samples = pCount;
+            memcpy(out->data[0], buffer->data[0], pCount * 4);
+            memcpy(out->data[1], buffer->data[1], pCount * 4);
+
+            int remain = count - pCount;
+            count = remain;
+            if (remain == 0) {
+                return 0;
+            }
+
+            memcpy(bufferTmp->data[0], buffer->data[0] + pCount * 4, remain * 4);
+            memcpy(bufferTmp->data[1], buffer->data[1] + pCount * 4, remain * 4);
+
+            memcpy(buffer->data[0], bufferTmp->data[0], remain * 4);
+            memcpy(buffer->data[1], bufferTmp->data[1], remain * 4);
+            return 0;
+        }
+    };
+
     class InputStream {
 
     public:
@@ -626,6 +707,7 @@ namespace {
         bool immediate{true};
         bool lastFrame{false};
         int lastFramePos = 0;
+        AudioFrameBuffer audioFrameBuffer;
         AVFrame *frame1{};
         AVFrame *frameWrite{};
         struct SwrContext *swr_ctx{};
@@ -885,22 +967,22 @@ namespace {
                                        av_err2str(ret));
             }
 
-            if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
-                nb_samples = 10000;
-            else {
-                nb_samples = c->frame_size;
-                immediate = false;
-            }
-
+//            if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
+//                nb_samples = 10000;
+//            else {
+//                nb_samples = c->frame_size;
+//                immediate = false;
+//            }
+            nb_samples = 1024 * 8;
 
             ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
                                            c->sample_rate, nb_samples);
 
-            ost->frame1 = alloc_audio_frame(c->sample_fmt, c->channel_layout,
-                                            c->sample_rate, nb_samples);
+//            ost->frame1 = alloc_audio_frame(c->sample_fmt, c->channel_layout,
+//                                            c->sample_rate, nb_samples);
 
-            ost->frameWrite = alloc_audio_frame(c->sample_fmt, c->channel_layout,
-                                                c->sample_rate, nb_samples);
+//            ost->frameWrite = alloc_audio_frame(c->sample_fmt, c->channel_layout,
+//                                                c->sample_rate, nb_samples);
 
             /* copy the stream parameters to the muxer */
             ret = avcodec_parameters_from_context(ost->stream->codecpar, c);
@@ -973,31 +1055,6 @@ namespace {
 
         }
 
-        static AVFrame *alloc_audio_frame(enum AVSampleFormat sample_fmt,
-                                          uint64_t channel_layout,
-                                          int sample_rate, int nb_samples) {
-            AVFrame *frame = av_frame_alloc();
-            int ret;
-
-            if (!frame) {
-                throw ConvertException("memory error: Error allocating an audio frame");
-            }
-
-            frame->format = sample_fmt;
-            frame->channel_layout = channel_layout;
-            frame->sample_rate = sample_rate;
-            frame->nb_samples = nb_samples;
-
-            if (nb_samples) {
-                ret = av_frame_get_buffer(frame, 0);
-                if (ret < 0) {
-                    throw ConvertException("memory error: Error allocating an audio buffer");
-                }
-            }
-
-            return frame;
-        }
-
         static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height) {
             AVFrame *picture;
             int ret;
@@ -1019,7 +1076,9 @@ namespace {
             return picture;
         }
 
-
+        /*
+         * deprecated
+         */
         void write_audio_frame(AVFrame *audioFrame) {
             int ret;
             int dst_nb_samples;
@@ -1148,15 +1207,21 @@ namespace {
 
                 frame->nb_samples = ret;
 
-                audioFrame = frame;
+                audioFrameBuffer.sendFrame(frame, ret);
 
-                audioFrame->pts = av_rescale_q(samples_count,
+                ret = audioFrameBuffer.receiveFrame(frame, codecContext->frame_size);
+                while (ret >= 0) {
+                    int64_t pts = av_rescale_q(samples_count,
                                                (AVRational) {1, codecContext->sample_rate},
                                                codecContext->time_base);
-                samples_count += ret;
-//            samples_count += audioFrame->nb_samples;
 
-                write_frame(codecContext, stream, audioFrame);
+                    frame->pts = pts;
+                    samples_count += frame->nb_samples;
+
+                    write_frame(codecContext, stream, frame);
+                    av_frame_make_writable(frame);
+                    ret = audioFrameBuffer.receiveFrame(frame, codecContext->frame_size);
+                }
             } else {
                 write_frame(codecContext, stream, audioFrame);
             }
@@ -1615,8 +1680,8 @@ namespace {
         }
 
         void onAudioFrame(AVFrame *audioFrame) override {
-//        write_audio_frame_immediate(audioFrame);
-            write_audio_frame(audioFrame);
+        write_audio_frame_immediate(audioFrame);
+//            write_audio_frame(audioFrame);
         }
 
         void onVideoFrame(AVFrame *pFrame) override {
