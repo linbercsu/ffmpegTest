@@ -704,6 +704,7 @@ namespace {
         AVCodecContext *codecContext{};
         AVCodec *encoder{};
         AVFrame *frame{};
+        int frameSize{0};
         bool immediate{true};
         bool lastFrame{false};
         int lastFramePos = 0;
@@ -975,9 +976,10 @@ namespace {
 //            }
             nb_samples = 1024 * 8;
 
-            ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
-                                           c->sample_rate, nb_samples);
-
+            ost->frame = getAudioFrame(1024 * 2);
+//            ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
+//                                           c->sample_rate, nb_samples);
+//
 //            ost->frame1 = alloc_audio_frame(c->sample_fmt, c->channel_layout,
 //                                            c->sample_rate, nb_samples);
 
@@ -1074,6 +1076,26 @@ namespace {
             }
 
             return picture;
+        }
+
+        AVFrame *getAudioFrame(int size) {
+//            __android_log_print(6, "AudioConverter", "getAudioFrame %d", size);
+            if (frame == nullptr) {
+                frameSize = size;
+                frame = alloc_audio_frame(codecContext->sample_fmt, codecContext->channel_layout,
+                                          codecContext->sample_rate, size);
+            }
+            if (size <= frameSize)
+                return frame;
+
+            if (frame != nullptr) {
+                av_frame_free(&frame);
+            }
+            frame = alloc_audio_frame(codecContext->sample_fmt, codecContext->channel_layout,
+                                      codecContext->sample_rate, size);
+
+            frameSize = size;
+            return frame;
         }
 
         /*
@@ -1191,6 +1213,7 @@ namespace {
                         codecContext->sample_rate, sourceSample_rate, AV_ROUND_UP);
 //            __android_log_print(6, "AudioConverter", "resample %d, %d, %d, %d, %d, %d", sourceSampleFormat, codecContext->sample_fmt, sourceSample_rate, codecContext->sample_rate, audioFrame->nb_samples, dst_nb_samples);
 
+                frame = getAudioFrame(dst_nb_samples);
                 ret = av_frame_make_writable(frame);
                 if (ret < 0)
                     throw ConvertException(

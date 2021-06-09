@@ -153,7 +153,7 @@ namespace {
     public:
         AVFrame* buffer = {nullptr};
         AVFrame* bufferTmp = {nullptr};
-        int SIZE = 1024 * 8;
+        int SIZE = 1024 * 4;
         int count = 0;
 
         ~AudioFrameBuffer() {
@@ -173,7 +173,26 @@ namespace {
             av_frame_make_writable(bufferTmp);
 
             if (pCount + count > SIZE) {
-                throw ConvertException("buffer internal error");
+                SIZE = pCount + count;
+                AVFrame * buffer1 = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                AVFrame* bufferTmp1 = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                av_frame_make_writable(buffer1);
+                av_frame_make_writable(bufferTmp1);
+
+                if (count > 0) {
+                    memcpy(buffer1->data[0], buffer->data[0], count * 4);
+                    memcpy(buffer1->data[1], buffer->data[1], count * 4);
+
+//                    memcpy(bufferTmp1->data[0], bufferTmp->data[0], count * 4);
+//                    memcpy(bufferTmp1->data[1], bufferTmp->data[1], count * 4);
+                }
+
+                av_frame_free(&buffer);
+                av_frame_free(&bufferTmp);
+
+                buffer = buffer1;
+                bufferTmp = bufferTmp1;
+//                throw ConvertException("buffer internal error");
             }
 
             memcpy(buffer->data[0] + count * 4, pFrame->data[0], pCount * 4);
@@ -577,6 +596,7 @@ namespace {
         AVCodecContext *codecContext{};
         AVCodec *encoder{};
         AVFrame *frame{};
+        int frameSize{0};
         struct SwrContext *swr_ctx{};
         int samples_count{};
         int64_t next_pts{};
@@ -747,11 +767,10 @@ namespace {
 
 
 //            }
-            nb_samples = 1024 * 8;
+            nb_samples = 1024 * 32;
 
 
-            ost->frame = alloc_audio_frame(c->sample_fmt, c->channel_layout,
-                                           c->sample_rate, nb_samples);
+            ost->frame = getAudioFrame(1024 * 2);
 
             /* copy the stream parameters to the muxer */
             ret = avcodec_parameters_from_context(ost->stream->codecpar, c);
@@ -791,6 +810,26 @@ namespace {
             }
         }
 
+        AVFrame *getAudioFrame(int size) {
+//            __android_log_print(6, "AudioConverter", "getAudioFrame %d", size);
+            if (frame == nullptr) {
+                frameSize = size;
+                frame = alloc_audio_frame(codecContext->sample_fmt, codecContext->channel_layout,
+                                          codecContext->sample_rate, size);
+            }
+            if (size <= frameSize)
+                return frame;
+
+            if (frame != nullptr) {
+                av_frame_free(&frame);
+            }
+            frame = alloc_audio_frame(codecContext->sample_fmt, codecContext->channel_layout,
+                                      codecContext->sample_rate, size);
+
+            frameSize = size;
+            return frame;
+        }
+
         /*
      * encode one audio frame and send it to the muxer
      * return 1 when encoding is finished, 0 otherwise
@@ -821,6 +860,7 @@ namespace {
                  * internally;
                  * make sure we do not overwrite it here
                  */
+                frame = getAudioFrame(dst_nb_samples);
                 ret = av_frame_make_writable(frame);
                 if (ret < 0)
                     throw ConvertException(
