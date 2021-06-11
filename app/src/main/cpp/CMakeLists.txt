@@ -68,11 +68,16 @@ add_library( # Sets the name of the library.
              native-lib.cpp
         MediaConverter.cpp
         AudioConverter.cpp
-
+        GLVideo.cpp
+        effect/BaseEffect.cpp
+        effect/GLUtil.cpp
+        effect/TextureCopy.cpp
+        effect/TestEffect.cpp
         )
 
 INCLUDE_DIRECTORIES(
         ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/effect
 #        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/include
         ${CMAKE_SOURCE_DIR}/ffmpeg
         ${CMAKE_SOURCE_DIR}/libyuv/include
@@ -92,6 +97,7 @@ find_library( # Sets the name of the path variable.
               log )
 
 find_library( z-lib z)
+find_library( gl-lib GLESV2)
 
 string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
 if(build_type MATCHES "^rel")
@@ -110,5 +116,6 @@ target_link_libraries( # Specifies the target library.
                        # included in the NDK.
                        ${log-lib}
                        ${z-lib}
+                       ${gl-lib}
         yuv
         )

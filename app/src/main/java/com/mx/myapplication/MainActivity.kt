@@ -23,19 +23,19 @@ class MainActivity : AppCompatActivity() {
 //        textView.text = stringFromJNI()
 //        Log.e("test", "test: max: ${max()}")
 
-            audioConverter = AsyncMediaConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mpd", "dash") {
+//            audioConverter = AsyncMediaConverter("/sdcard/test1/1.rmvb", "/sdcard/test1/big/test.mpd", "dash") {
+//
+//
+//            }
+////
+//        audioConverter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+//
+            converter = AsyncAudioConverter("/sdcard/test1/10.wmv", "/sdcard/test1/wmv.mp3", "mp3") {
 
 
             }
 
-        audioConverter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
-//
-//            converter = AsyncAudioConverter("/sdcard/test1/big.mp4", "/sdcard/test1/big/big.mp3", "mp3") {
-//
-//
-//            }
-//
-//        converter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+        converter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
 
         textView.setOnClickListener {
             audioConverter.stop()
@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        audioConverter.stop()
+//        audioConverter.stop()
         super.onStop()
     }
 

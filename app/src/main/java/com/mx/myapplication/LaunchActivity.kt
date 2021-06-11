@@ -44,7 +44,7 @@ class LaunchActivity : AppCompatActivity() {
             return
         }
 
-        MainActivity.start(this)
+        EntryActivity.start(this)
     }
 
     override fun onRequestPermissionsResult(
