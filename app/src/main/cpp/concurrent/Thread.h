@@ -10,83 +10,86 @@
 #include <atomic>
 #include <condition_variable>
 
-namespace concurrent {
+namespace mx {
+    namespace concurrent {
 
-    class thread;
-    class condition_variable;
+        class thread;
 
-    class threadCallback {
-    public:
-        virtual void onThreadRun(thread *thread) = 0;
-    };
+        class condition_variable;
 
-    class thread {
+        class threadCallback {
+        public:
+            virtual void onThreadRun(thread *thread) = 0;
+        };
 
-    public:
-        thread(threadCallback *callback);
+        class thread {
 
-        thread();
+        public:
+            thread(threadCallback *callback);
 
-        virtual ~thread();
+            thread();
 
-        bool isInterrupted();
+            virtual ~thread();
 
-        void interrupt();
+            bool isInterrupted();
 
-        void run();
+            void interrupt();
 
-        void join();
+            void run();
 
-    public:
-        static thread *current();
+            void join();
 
-    private:
-        void onExecuted();
+        public:
+            static thread *current();
+
+        private:
+            void onExecuted();
 
 
-        std::atomic_bool interrupted{false};
-        std::thread *innerThread{nullptr};
-        threadCallback *callback{nullptr};
+            std::atomic_bool interrupted{false};
+            std::thread *innerThread{nullptr};
+            threadCallback *callback{nullptr};
 
-        friend class condition_variable;
+            friend class condition_variable;
 
-        std::atomic<condition_variable *> currentWaiting{nullptr};
-    };
+            std::atomic<condition_variable *> currentWaiting{nullptr};
+        };
 
-    class condition_variable : public std::condition_variable {
+        class condition_variable : public std::condition_variable {
+
+            template<class _Predicate>
+            _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
+            bool waitInterruptibly(std::unique_lock<std::mutex> &__lk, _Predicate __pred);
+        };
 
         template<class _Predicate>
-        _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
-        bool waitInterruptibly(std::unique_lock<std::mutex> &__lk, _Predicate __pred);
-    };
+        bool
+        condition_variable::waitInterruptibly(std::unique_lock<std::mutex> &__lk,
+                                              _Predicate __pred) {
+            thread *currentThread = thread::current();
+            currentThread->currentWaiting = this;
+            while (true) {
+                if (currentThread->isInterrupted()) {
+                    currentThread->currentWaiting = nullptr;
+                    return true;
+                }
 
-    template<class _Predicate>
-    bool
-    condition_variable::waitInterruptibly(std::unique_lock<std::mutex> &__lk, _Predicate __pred) {
-        thread *currentThread = thread::current();
-        currentThread->currentWaiting = this;
-        while (true) {
+                if (!__pred()) {
+                    wait(__lk);
+                } else {
+                    break;
+                }
+            }
+
+            currentThread->currentWaiting = nullptr;
+
             if (currentThread->isInterrupted()) {
-                currentThread->currentWaiting = nullptr;
                 return true;
             }
 
-            if (!__pred()) {
-                wait(__lk);
-            } else {
-                break;
-            }
+            return false;
         }
-
-        currentThread->currentWaiting = nullptr;
-
-        if (currentThread->isInterrupted()) {
-            return true;
-        }
-
-        return false;
     }
 }
-
 
 #endif //MY_APPLICATION_THREAD_H
