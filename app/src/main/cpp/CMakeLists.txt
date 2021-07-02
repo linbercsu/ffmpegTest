@@ -68,11 +68,13 @@ add_library( # Sets the name of the library.
              native-lib.cpp
         MediaConverter.cpp
         AudioConverter.cpp
+        thread/Thread.cpp
         GLVideo.cpp
         effect/BaseEffect.cpp
         effect/GLUtil.cpp
         effect/TextureCopy.cpp
         effect/TestEffect.cpp
+        effect/ZEffect.cpp
         )
 
 INCLUDE_DIRECTORIES(

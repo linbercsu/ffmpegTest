@@ -22,6 +22,7 @@ extern "C" {
 #include "GLUtil.h"
 #include "BaseEffect.h"
 #include "TestEffect.h"
+#include "ZEffect.h"
 
 #include "mediacodec/NXMediaCodecEncInterface.h"
 
@@ -129,7 +130,7 @@ bool setupGraphics(int w, int h) {
 //    LOGI("glGetAttribLocation(\"vPosition\") = %d\n",
 //         gvPositionHandle);
 
-    glViewport(0, 0, w, h);
+//    glViewport(0, 0, w, h);
     checkGlError("glViewport");
     return true;
 }
@@ -809,7 +810,7 @@ namespace hello {
     class OutputStream : public InputStreamCallback {
     public:
         OutputStream() {
-            effect = new nx_effect::TestEffect();
+            effect = new nx_effect::ZEffect();
         }
 
         ~OutputStream() {
@@ -873,7 +874,7 @@ namespace hello {
             surfaceWidth = w;
             surfaceHeight = h;
 
-            glViewport(0, 0, w/2, h/2);
+            glViewport(w/4, h/4, w/2, h/2);
 //            setupGraphics(w, h);
 //            createTexture();
 //            vPosition = glGetAttribLocation(gProgram, "vPosition");
