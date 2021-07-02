@@ -166,62 +166,6 @@ namespace {
         return frame;
     }
 
-    class AudioFrameBuffer {
-
-    public:
-        AVFrame* buffer = {nullptr};
-        AVFrame* bufferTmp = {nullptr};
-        int SIZE = 1024 * 8;
-        int count = 0;
-
-        ~AudioFrameBuffer() {
-            if (buffer != nullptr) {
-                av_frame_free(&buffer);
-                av_frame_free(&bufferTmp);
-            }
-        }
-
-        void sendFrame(AVFrame* pFrame, int pCount) {
-            if (buffer == nullptr) {
-                buffer = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
-                bufferTmp = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
-            }
-
-            av_frame_make_writable(buffer);
-            av_frame_make_writable(bufferTmp);
-
-            if (pCount + count > SIZE) {
-                throw ConvertException("buffer internal error");
-            }
-
-            memcpy(buffer->data[0] + count * 4, pFrame->data[0], pCount * 4);
-            memcpy(buffer->data[1] + count * 4, pFrame->data[1], pCount * 4);
-            count += pCount;
-        }
-
-        int receiveFrame(AVFrame* out, int pCount) {
-            if (count < pCount)
-                return AVERROR(EAGAIN);
-
-            out->nb_samples = pCount;
-            memcpy(out->data[0], buffer->data[0], pCount * 4);
-            memcpy(out->data[1], buffer->data[1], pCount * 4);
-
-            int remain = count - pCount;
-            count = remain;
-            if (remain == 0) {
-                return 0;
-            }
-
-            memcpy(bufferTmp->data[0], buffer->data[0] + pCount * 4, remain * 4);
-            memcpy(bufferTmp->data[1], buffer->data[1] + pCount * 4, remain * 4);
-
-            memcpy(buffer->data[0], bufferTmp->data[0], remain * 4);
-            memcpy(buffer->data[1], bufferTmp->data[1], remain * 4);
-            return 0;
-        }
-    };
-
     class InputStream {
 
     public:
@@ -599,6 +543,8 @@ namespace {
             if (audio_dec_ctx)
                 decode_packet(audio_dec_ctx, nullptr);
 
+            processCallback->onProgress(100);
+
 //        printf("Demuxing succeeded.\n");
 
 //        if (audio_stream) {
@@ -633,6 +579,81 @@ namespace {
 
     private:
         std::string sourcePath;
+    };
+
+    class AudioFrameBuffer {
+
+    public:
+        AVFrame* buffer = {nullptr};
+        AVFrame* bufferTmp = {nullptr};
+        int SIZE = 1024 * 4;
+        int count = 0;
+
+        ~AudioFrameBuffer() {
+            if (buffer != nullptr) {
+                av_frame_free(&buffer);
+                av_frame_free(&bufferTmp);
+            }
+        }
+
+        void sendFrame(AVFrame* pFrame, int pCount) {
+            if (buffer == nullptr) {
+                buffer = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                bufferTmp = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+            }
+
+            av_frame_make_writable(buffer);
+            av_frame_make_writable(bufferTmp);
+
+            if (pCount + count > SIZE) {
+                SIZE = pCount + count;
+                AVFrame * buffer1 = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                AVFrame* bufferTmp1 = alloc_audio_frame((enum AVSampleFormat)pFrame->format, pFrame->channel_layout, pFrame->sample_rate, SIZE);
+                av_frame_make_writable(buffer1);
+                av_frame_make_writable(bufferTmp1);
+
+                if (count > 0) {
+                    memcpy(buffer1->data[0], buffer->data[0], count * 4);
+                    memcpy(buffer1->data[1], buffer->data[1], count * 4);
+
+//                    memcpy(bufferTmp1->data[0], bufferTmp->data[0], count * 4);
+//                    memcpy(bufferTmp1->data[1], bufferTmp->data[1], count * 4);
+                }
+
+                av_frame_free(&buffer);
+                av_frame_free(&bufferTmp);
+
+                buffer = buffer1;
+                bufferTmp = bufferTmp1;
+//                throw ConvertException("buffer internal error");
+            }
+
+            memcpy(buffer->data[0] + count * 4, pFrame->data[0], pCount * 4);
+            memcpy(buffer->data[1] + count * 4, pFrame->data[1], pCount * 4);
+            count += pCount;
+        }
+
+        int receiveFrame(AVFrame* out, int pCount) {
+            if (count < pCount)
+                return AVERROR(EAGAIN);
+
+            out->nb_samples = pCount;
+            memcpy(out->data[0], buffer->data[0], pCount * 4);
+            memcpy(out->data[1], buffer->data[1], pCount * 4);
+
+            int remain = count - pCount;
+            count = remain;
+            if (remain == 0) {
+                return 0;
+            }
+
+            memcpy(bufferTmp->data[0], buffer->data[0] + pCount * 4, remain * 4);
+            memcpy(bufferTmp->data[1], buffer->data[1] + pCount * 4, remain * 4);
+
+            memcpy(buffer->data[0], bufferTmp->data[0], remain * 4);
+            memcpy(buffer->data[1], bufferTmp->data[1], remain * 4);
+            return 0;
+        }
     };
 
     class OutputStream : public InputStreamCallback {
