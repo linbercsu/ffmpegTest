@@ -68,7 +68,7 @@ add_library( # Sets the name of the library.
              native-lib.cpp
         MediaConverter.cpp
         AudioConverter.cpp
-        thread/Thread.cpp
+        concurrent/Thread.cpp
         GLVideo.cpp
         effect/BaseEffect.cpp
         effect/GLUtil.cpp
