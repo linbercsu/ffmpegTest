@@ -2,8 +2,7 @@
 // Created by ZhaoLinlin on 2021/7/1.
 //
 
-#ifndef MY_APPLICATION_THREAD_H
-#define MY_APPLICATION_THREAD_H
+#pragma once
 
 #include <mutex>
 #include <thread>
@@ -91,5 +90,3 @@ namespace mx {
         }
     }
 }
-
-#endif //MY_APPLICATION_THREAD_H

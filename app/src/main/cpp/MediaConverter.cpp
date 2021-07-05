@@ -10,6 +10,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
+#include "libavcodec/packet.h"
 #include "libavcodec/jni.h"
 }
 
@@ -253,7 +254,7 @@ namespace {
             if (ret < 0) {
 
                 throw ConvertException(
-                        std::string("decode error: Error submitting a packet for decoding: ") +
+                        std::string("decode error: Error submitting a packet for decoding:1 ") +
                         av_err2str(ret));
 //            fprintf(stderr, "Error submitting a packet for decoding (%s)\n", av_err2str(ret));
             }
@@ -292,7 +293,7 @@ namespace {
 //        __android_log_print(6, "MediaConverter", "on video pkt %ld %d", package->pts, ret);
             if (ret != AVERROR(EAGAIN) && ret < 0) {
                 throw ConvertException(
-                        std::string("decode error: Error submitting a packet for decoding: ") +
+                        std::string("decode error: Error submitting a packet for decoding:2 ") +
                         av_err2str(ret));
             }
 
@@ -720,6 +721,7 @@ namespace {
         std::string targetPath;
         std::string format;
 
+        bool copyExtraData;
         AVFormatContext *context{};
         AVStream *stream{};
         AVCodecContext *codecContext{};
@@ -803,7 +805,7 @@ namespace {
         }
 
         void addVideo(AVCodecContext *sourceCodecContext) {
-            __android_log_print(6, "AudioConverter", "addVideo %d", sourceCodecContext->pix_fmt);
+            __android_log_print(6, "AudioConverter", "test addVideo %d", sourceCodecContext->pix_fmt);
             computeTargetSize(sourceCodecContext);
             if (context->oformat->video_codec == AV_CODEC_ID_MPEG4) {
                 context->oformat->video_codec = AV_CODEC_ID_H264;
@@ -1047,6 +1049,8 @@ namespace {
 
 //        if (codec->id == AV_CODEC_ID_H264)
 //            av_opt_set(c->priv_data, "preset", "slow", 0);
+            av_opt_set(c->priv_data, "useavcformat", "true", 0);
+
 
             av_dict_copy(&opt, opt_arg, 0);
 
@@ -1066,6 +1070,17 @@ namespace {
 
             /* copy the stream parameters to the muxer */
             ret = avcodec_parameters_from_context(videoStream->codecpar, c);
+
+            //hacker
+            videoStream->codecpar->extradata = static_cast<uint8_t *>(av_mallocz(
+                    4 + AV_INPUT_BUFFER_PADDING_SIZE));
+            videoStream->codecpar->extradata_size = 4;
+            videoStream->codecpar->extradata[0] = 0x1;
+            videoStream->codecpar->extradata[1] = 0x42;//baseline
+            videoStream->codecpar->extradata[2] = 0x80;
+            videoStream->codecpar->extradata[3] = 0x1e; //baseline 3.0
+//            memcpy(par->extradata, codec->extradata, codec->extradata_size);
+
             if (ret < 0) {
                 throw ConvertException(
                         std::string("encode error: Could not copy the video stream parameters: ") +
@@ -1598,8 +1613,14 @@ namespace {
                 av_packet_rescale_ts(&pkt, c->time_base, st->time_base);
                 pkt.stream_index = st->index;
 
+                if (!copyExtraData) {
+                    copyExtraData = true;
+//                    avcodec_parameters_from_context(videoStream->codecpar, videoCodecContext);
+                }
                 /* Write the compressed frame to the media file. */
 //        log_packet(fmt_ctx, &pkt);
+                int extradata_size;
+                uint8_t * extradata = av_packet_get_side_data(&pkt, AV_PKT_DATA_NEW_EXTRADATA, &extradata_size);
                 ret = av_interleaved_write_frame(fmt_ctx, &pkt);
                 av_packet_unref(&pkt);
                 if (ret < 0) {
@@ -1815,7 +1836,7 @@ namespace {
 
     void av_log_my_callback(void *ptr, int level, const char *fmt, va_list vl) {
         AVClass *avc = ptr ? *(AVClass **) ptr : nullptr;
-        __android_log_print(6, avc ? avc->class_name : "mediaConverter", fmt, vl);
+        __android_log_vprint(6, avc ? avc->class_name : "mediaConverter", fmt, vl);
     }
 
     const JNINativeMethod methods[] =
@@ -1827,7 +1848,7 @@ namespace {
             };
 
     void MediaConverter::initClass(JNIEnv *env, jclass clazz) {
-//    av_log_set_callback(&av_log_my_callback);
+    av_log_set_callback(&av_log_my_callback);
         env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
         JavaProgressCallback::init(env, clazz);
         JavaVM *vm = nullptr;

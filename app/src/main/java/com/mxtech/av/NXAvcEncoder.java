@@ -15,6 +15,10 @@ import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 
+import static android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel3;
+import static android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel31;
+import static android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline;
+
 /**
  * 16/8/16.
  */
@@ -366,10 +370,10 @@ public class NXAvcEncoder {
             Log.d(TAG, "call reconfigureMediaFormat !!!");
         }
 
-//        MediaCodecInfo.CodecCapabilities capabilities = m_codecInfo
-//                .getCapabilitiesForType(VIDEO_MIME_TYPE);
+        MediaCodecInfo.CodecCapabilities capabilities = m_codecInfo
+                .getCapabilitiesForType(VIDEO_MIME_TYPE);
 //
-//        MediaCodecInfo.CodecProfileLevel[] levels = capabilities.profileLevels;
+        MediaCodecInfo.CodecProfileLevel[] levels = capabilities.profileLevels;
 
         m_codecFormat = MediaFormat.createVideoFormat( VIDEO_MIME_TYPE, width, height);
         m_codecFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat);
@@ -379,6 +383,16 @@ public class NXAvcEncoder {
         m_codecFormat.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
 //        CodecInfo infoEnc = CodecInfo.getSupportedFormatInfo(encoderName, mimeType, w, h, MAX_FPS);
 
+        for (MediaCodecInfo.CodecProfileLevel level : levels) {
+            if (level.profile == AVCProfileBaseline) {
+                if (level.level == AVCLevel3 || level.level == AVCLevel31) {
+                    m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
+                    m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
+                    break;
+                }
+
+            }
+        }
 //        m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, levels[4].profile);
 //        m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, levels[4].level);
 
