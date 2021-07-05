@@ -383,14 +383,33 @@ public class NXAvcEncoder {
         m_codecFormat.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
 //        CodecInfo infoEnc = CodecInfo.getSupportedFormatInfo(encoderName, mimeType, w, h, MAX_FPS);
 
+        boolean profileSet = false;
         for (MediaCodecInfo.CodecProfileLevel level : levels) {
             if (level.profile == AVCProfileBaseline) {
                 if (level.level == AVCLevel3 || level.level == AVCLevel31) {
                     m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
                     m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
+                    profileSet = true;
                     break;
                 }
 
+            }
+        }
+
+        if (!profileSet) {
+            String manufacturer = Build.MANUFACTURER.trim();
+            if (manufacturer.contains("Xiaomi")) {
+                for (MediaCodecInfo.CodecProfileLevel level : levels) {
+                    if (level.profile == AVCProfileBaseline) {
+                        if (level.level >= AVCLevel3) {
+                            m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
+                            m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
+                            profileSet = true;
+                            break;
+                        }
+
+                    }
+                }
             }
         }
 //        m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, levels[4].profile);
