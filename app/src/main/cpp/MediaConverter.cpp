@@ -416,6 +416,10 @@ namespace {
                 }
 
                 /* Init the decoders */
+                if (AVMEDIA_TYPE_VIDEO == type) {
+                    (*dec_ctx)->thread_count = 3;
+                }
+
                 if ((ret = (avcodec_open2(*dec_ctx, dec, &opts))) < 0) {
 //                fprintf(stderr, "Failed to open %s codec\n",
 //                        av_get_media_type_string(type));
@@ -469,6 +473,12 @@ namespace {
             if (audio_stream_idx != -1) {
                 audio_stream = fmt_ctx->streams[audio_stream_idx];
                 duration = audio_stream->duration;
+
+                if (duration < 0) {
+                    duration = av_rescale_q(fmt_ctx->duration,
+                                            AV_TIME_BASE_Q,
+                                            audio_stream->time_base);
+                }
 
                 frame = av_frame_alloc();
                 if (!frame) {
@@ -1893,7 +1903,7 @@ namespace {
             };
 
     void MediaConverter::initClass(JNIEnv *env, jclass clazz) {
-    av_log_set_callback(&av_log_my_callback);
+//    av_log_set_callback(&av_log_my_callback);
         env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0]));
         JavaProgressCallback::init(env, clazz);
         JavaVM *vm = nullptr;
@@ -1908,13 +1918,13 @@ namespace {
 //        _env->ExceptionDescribe();
 //    }
     }
-}
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_mxtech_av_MediaConverter_nativeInitClass(
-        JNIEnv* env,
-        jclass clazz) {
-    MediaConverter::initClass(env, clazz);
+    extern "C" JNIEXPORT void JNICALL
+    Java_com_mxtech_av_MediaConverter_nativeInitClass(
+            JNIEnv* env,
+            jclass clazz) {
+        MediaConverter::initClass(env, clazz);
+    }
 }
 
 

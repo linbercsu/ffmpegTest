@@ -25,6 +25,9 @@ class AsyncMediaConverter(private val source: String, private val target: String
             } else {
                 tempPath
             }
+
+            File(tar).parentFile.mkdirs()
+
             audioConverter = MediaConverter(source, tar, format) {
                 Log.e("test", "progress on $it")
             }
