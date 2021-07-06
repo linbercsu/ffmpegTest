@@ -21,7 +21,7 @@ git submodule update
 `build ffmpeg libs`  
 ```shell script
 cd app/src/main/cpp
-./build-all
+./build-all.sh
 
 ```
 `build app apk`  
