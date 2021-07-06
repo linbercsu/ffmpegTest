@@ -4,6 +4,7 @@
 Add NDK to your shell Env. somethings like:  
 ```shell script
 export NDK=/Your-Path/Android/sdk/ndk/20.1.5948944
+export PATH=${PATH}:${NDK}
 ```
 
 
