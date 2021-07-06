@@ -399,6 +399,20 @@ public class NXAvcEncoder {
 
         if (!profileSet) {
             for (MediaCodecInfo.CodecProfileLevel level : levels) {
+                if (level.profile == AVCProfileBaseline) {
+                    if (level.level >= AVCLevel3) {
+                        m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
+                        m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
+                        profileSet = true;
+                        break;
+                    }
+
+                }
+            }
+        }
+
+        if (!profileSet) {
+            for (MediaCodecInfo.CodecProfileLevel level : levels) {
                 if (level.profile == AVCProfileConstrainedBaseline) {
                     m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
                     m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
