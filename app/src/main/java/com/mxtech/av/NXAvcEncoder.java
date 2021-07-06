@@ -18,6 +18,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import static android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel3;
 import static android.media.MediaCodecInfo.CodecProfileLevel.AVCLevel31;
 import static android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline;
+import static android.media.MediaCodecInfo.CodecProfileLevel.AVCProfileConstrainedBaseline;
 
 /**
  * 16/8/16.
@@ -397,18 +398,13 @@ public class NXAvcEncoder {
         }
 
         if (!profileSet) {
-            String manufacturer = Build.MANUFACTURER.trim();
-            if (manufacturer.contains("Xiaomi")) {
-                for (MediaCodecInfo.CodecProfileLevel level : levels) {
-                    if (level.profile == AVCProfileBaseline) {
-                        if (level.level >= AVCLevel3) {
-                            m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
-                            m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
-                            profileSet = true;
-                            break;
-                        }
+            for (MediaCodecInfo.CodecProfileLevel level : levels) {
+                if (level.profile == AVCProfileConstrainedBaseline) {
+                    m_codecFormat.setInteger(MediaFormat.KEY_PROFILE, level.profile);
+                    m_codecFormat.setInteger(MediaFormat.KEY_LEVEL, level.level);
+                    profileSet = true;
+                    break;
 
-                    }
                 }
             }
         }
