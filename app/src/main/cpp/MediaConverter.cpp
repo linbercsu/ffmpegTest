@@ -18,6 +18,7 @@ extern "C" {
 #include <jni.h>
 #include <android/log.h>
 #include <string>
+#include <list>
 #include <pthread.h>
 #include <mutex>
 #include <utility>
@@ -666,6 +667,12 @@ namespace {
 
         ~OutputStream() {
 //        __android_log_write(6, "AudioConverter", "~OutputStream");
+            for (auto it = delayAudioList.begin(); it != delayAudioList.end();) {
+                AVPacket* packet = *it;
+                av_packet_free(&packet);
+                it = delayAudioList.erase(it);
+            }
+
             if (codecContext != nullptr)
                 avcodec_free_context(&codecContext);
 
@@ -723,8 +730,8 @@ namespace {
         std::string targetPath;
         std::string format;
 
-        bool copyExtraData;
-        bool headerWritten;
+        bool headerWritten{false};
+        std::list<AVPacket*> delayAudioList{};
         AVFormatContext *context{};
         AVStream *stream{};
         AVCodecContext *codecContext{};
@@ -1616,9 +1623,14 @@ namespace {
                 av_packet_rescale_ts(&pkt, c->time_base, st->time_base);
                 pkt.stream_index = st->index;
 
-                if (!copyExtraData) {
-                    copyExtraData = true;
-//                    avcodec_parameters_from_context(videoStream->codecpar, videoCodecContext);
+                if (c != videoCodecContext) {
+                    if (!headerWritten) {
+                        __android_log_print(6, "MediaConverter", "delay.");
+                        AVPacket *pPacket = av_packet_clone(&pkt);
+                        av_packet_unref(&pkt);
+                        delayAudioList.push_back(pPacket);
+                        continue;
+                    }
                 }
                 /* Write the compressed frame to the media file. */
 //        log_packet(fmt_ctx, &pkt);
@@ -1630,8 +1642,28 @@ namespace {
                             std::string("encode error: av_interleaved_write_frame: ") +
                             av_err2str(ret));
                 }
+
+                writeDelayAudio();
             }
 
+        }
+
+        void writeDelayAudio() {
+            if (delayAudioList.empty())
+                return;
+
+            int ret;
+            for (auto it = delayAudioList.begin(); it != delayAudioList.end();) {
+                AVPacket* packet = *it;
+                ret = av_interleaved_write_frame(context, *it);
+                av_packet_free(&packet);
+                it = delayAudioList.erase(it);
+                if (ret < 0) {
+                    throw ConvertException(
+                            std::string("encode error: av_interleaved_write_frame1: ") +
+                            av_err2str(ret));
+                }
+            }
         }
 
         static int computeSize(int s, int max) {
