@@ -20,7 +20,7 @@ git submodule update
 
 `build ffmpeg libs`  
 ```shell script
-cd src/main/cpp
+cd app/src/main/cpp
 ./build-all
 
 ```
