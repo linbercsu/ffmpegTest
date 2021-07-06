@@ -170,7 +170,7 @@ static int refreshExtraData(SAndroidHwContext * s, AVCodecContext * avctx)
 			avctx->extradata_size = iExtraDataSize;
 			YX_AMediaCodec_Enc_getExtraData(s->encoder, avctx->extradata, avctx->extradata_size);
 
-			if(s->useavcformat && !strcmp(s->useavcformat, "true"))
+			if(!s->useavcformat || strcmp(s->useavcformat, "false"))
 			{
 				if ( avctx->codec_id == AV_CODEC_ID_H264)
 				{

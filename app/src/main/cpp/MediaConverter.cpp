@@ -707,9 +707,11 @@ namespace {
 
 
             if (context != nullptr) {
-                if (!(context->oformat->flags & AVFMT_NOFILE))
-                    /* Close the output file. */
-                    avio_closep(&context->pb);
+                if (headerWritten) {
+                    if (!(context->oformat->flags & AVFMT_NOFILE))
+                        /* Close the output file. */
+                        avio_closep(&context->pb);
+                }
 
                 /* free the stream */
                 avformat_free_context(context);
@@ -722,6 +724,7 @@ namespace {
         std::string format;
 
         bool copyExtraData;
+        bool headerWritten;
         AVFormatContext *context{};
         AVStream *stream{};
         AVCodecContext *codecContext{};
@@ -1072,13 +1075,13 @@ namespace {
             ret = avcodec_parameters_from_context(videoStream->codecpar, c);
 
             //hacker
-            videoStream->codecpar->extradata = static_cast<uint8_t *>(av_mallocz(
-                    4 + AV_INPUT_BUFFER_PADDING_SIZE));
-            videoStream->codecpar->extradata_size = 4;
-            videoStream->codecpar->extradata[0] = 0x1;
-            videoStream->codecpar->extradata[1] = 0x42;//baseline
-            videoStream->codecpar->extradata[2] = 0x80;
-            videoStream->codecpar->extradata[3] = 0x1e; //baseline 3.0
+//            videoStream->codecpar->extradata = static_cast<uint8_t *>(av_mallocz(
+//                    4 + AV_INPUT_BUFFER_PADDING_SIZE));
+//            videoStream->codecpar->extradata_size = 4;
+//            videoStream->codecpar->extradata[0] = 0x1;
+//            videoStream->codecpar->extradata[1] = 0x42;//baseline
+//            videoStream->codecpar->extradata[2] = 0x80;
+//            videoStream->codecpar->extradata[3] = 0x1e; //baseline 3.0
 //            memcpy(par->extradata, codec->extradata, codec->extradata_size);
 
             if (ret < 0) {
@@ -1619,8 +1622,7 @@ namespace {
                 }
                 /* Write the compressed frame to the media file. */
 //        log_packet(fmt_ctx, &pkt);
-                int extradata_size;
-                uint8_t * extradata = av_packet_get_side_data(&pkt, AV_PKT_DATA_NEW_EXTRADATA, &extradata_size);
+                writeHeader();
                 ret = av_interleaved_write_frame(fmt_ctx, &pkt);
                 av_packet_unref(&pkt);
                 if (ret < 0) {
@@ -1727,7 +1729,18 @@ namespace {
         }
 
         void onStart() override {
+
+        }
+
+        void writeHeader() {
+
+            if (headerWritten)
+                return;
+            headerWritten = true;
+
             int ret;
+
+            avcodec_parameters_from_context(videoStream->codecpar, videoCodecContext);
 
             if (!(context->oformat->flags & AVFMT_NOFILE)) {
                 ret = avio_open(&context->pb, targetPath.c_str(), AVIO_FLAG_WRITE);
