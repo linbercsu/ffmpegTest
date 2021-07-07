@@ -1070,9 +1070,9 @@ namespace {
 
 //        if (codec->id == AV_CODEC_ID_H264)
 //            av_opt_set(c->priv_data, "preset", "slow", 0);
-            av_opt_set(c->priv_data, "useavcformat", "false", 0);
-            av_opt_set(c->priv_data, "profile", "baseline", 0);
-            av_opt_set(c->priv_data, "level", "3.1", 0);
+//            av_opt_set(c->priv_data, "useavcformat", "false", 0);
+//            av_opt_set(c->priv_data, "profile", "baseline", 0);
+//            av_opt_set(c->priv_data, "level", "3.1", 0);
 
 
             av_dict_copy(&opt, opt_arg, 0);
