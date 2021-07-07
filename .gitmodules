@@ -4,3 +4,6 @@
 [submodule "app/src/main/cpp/libyuv"]
 	path = app/src/main/cpp/libyuv
 	url = https://chromium.googlesource.com/libyuv/libyuv
+[submodule "app/src/main/cpp/x264"]
+	path = app/src/main/cpp/x264
+	url = https://code.videolan.org/videolan/x264.git

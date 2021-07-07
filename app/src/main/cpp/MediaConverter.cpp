@@ -10,7 +10,6 @@ extern "C" {
 #include <libavutil/opt.h>
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
-#include "libavcodec/packet.h"
 #include "libavcodec/jni.h"
 }
 
@@ -27,6 +26,7 @@ extern "C" {
 #include "mediacodec/NXMediaCodecEncInterface.h"
 
 extern AVCodec ff_android_hw_h264_encoder;
+extern AVCodec ff_libx264_encoder;
 #define SCALE_FLAGS SWS_BICUBIC
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
 
@@ -385,13 +385,13 @@ namespace {
                 }
 
                 /* find decoder for the stream */
-                if (st->codecpar->codec_id == AV_CODEC_ID_H264) {
-
-                    dec = avcodec_find_decoder_by_name("h264_mediacodec");
+//                if (st->codecpar->codec_id == AV_CODEC_ID_H264) {
+//
+//                    dec = avcodec_find_decoder_by_name("h264_mediacodec");
 //                    dec = &ff_android_hw_h264_decoder;
-                } else {
+//                } else {
                     dec = avcodec_find_decoder(st->codecpar->codec_id);
-                }
+//                }
                 if (!dec) {
                     throw ConvertException("decode error: Failed to find codec");
                 }
@@ -877,6 +877,7 @@ namespace {
             /* find the encoder */
             if (codec_id == AV_CODEC_ID_H264) {
                 enc = &ff_android_hw_h264_encoder;
+//                enc = &ff_libx264_encoder;
             } else {
                 enc = avcodec_find_encoder(codec_id);
             }
@@ -1069,7 +1070,9 @@ namespace {
 
 //        if (codec->id == AV_CODEC_ID_H264)
 //            av_opt_set(c->priv_data, "preset", "slow", 0);
-            av_opt_set(c->priv_data, "useavcformat", "true", 0);
+            av_opt_set(c->priv_data, "useavcformat", "false", 0);
+            av_opt_set(c->priv_data, "profile", "baseline", 0);
+            av_opt_set(c->priv_data, "level", "3.1", 0);
 
 
             av_dict_copy(&opt, opt_arg, 0);

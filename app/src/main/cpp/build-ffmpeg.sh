@@ -50,11 +50,12 @@ fi
 #ADDI_CFLAGS="-fPIE -pie -march=armv7-a -mfloat-abi=softfp -mfpu=neon"
 #EXTRA_CFLAGS="-mtune=atom -msse3 -mssse3 -mfpmath=sse"
 LAME_ROOT=$(pwd)/lame-build
+X264_ROOT=$(pwd)/x264
 EXTRA_CFLAGS+=" -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function"
-EXTRA_CFLAGS+=" -I ${LAME_ROOT} -ftree-vectorize -ffunction-sections -funwind-tables -fomit-frame-pointer -no-canonical-prefixes -pipe"
+EXTRA_CFLAGS+=" -I ${LAME_ROOT} -I ${X264_ROOT}/install/include -ftree-vectorize -ffunction-sections -funwind-tables -fomit-frame-pointer -no-canonical-prefixes -pipe"
 
 #ADDI_CFLAGS="-O2 -fpic -I ${LAME_ROOT}-ftree-vectorize -ffunction-sections -funwind-tables -fomit-frame-pointer -no-canonical-prefixes -pipe"
-ADDI_LDFLAGS="-L ${LAME_ROOT}/${ARCH_DIR}"
+ADDI_LDFLAGS="-L ${LAME_ROOT}/${ARCH_DIR} -L ${X264_ROOT}/install/lib "
 SYSROOT=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
 TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
 PREFIX=$(pwd)/ffmpeg-build/${ARCH_DIR}
@@ -89,6 +90,7 @@ configure() {
     --enable-libmp3lame \
     --enable-jni \
     --enable-mediacodec \
+    --enable-libx264 \
 
 }
 

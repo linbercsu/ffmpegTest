@@ -9,6 +9,8 @@ rm -rf ../obj/
 # libmp3lame
 ./build-lame.sh
 
+./build-x264.sh
+
 # ffmpeg
 #./build-ffmpeg.sh arm
 ./build-ffmpeg.sh arm64

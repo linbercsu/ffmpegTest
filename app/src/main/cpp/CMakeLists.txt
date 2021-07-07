@@ -42,6 +42,7 @@ set(
         ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswresample.a
         ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswscale.a
         ${CMAKE_SOURCE_DIR}/lame-build/${ANDROID_ABI}/libmp3lame.a
+        ${CMAKE_SOURCE_DIR}/x264/install/lib/libx264.a
 )
 
 
