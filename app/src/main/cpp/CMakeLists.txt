@@ -67,6 +67,7 @@ add_library( # Sets the name of the library.
         ${CMAKE_SOURCE_DIR}/mediacodec/android/jniUtils/NXAndroidJniBase.c
         ${CMAKE_SOURCE_DIR}/mediacodec/android/jniUtils/NXAndroidOSBuild.c
              native-lib.cpp
+        mx_native_crash_collector.c
         MediaConverter.cpp
         AudioConverter.cpp
         concurrent/Thread.cpp

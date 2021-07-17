@@ -5,7 +5,9 @@ import android.content.Intent
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.widget.TextView
+import com.mxtech.NativeCrashCollector
 import com.mxtech.av.AsyncAudioConverter
 import com.mxtech.av.AsyncMediaConverter
 
@@ -16,6 +18,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        NativeCrashCollector.Callback { log -> Log.e("test", "log: $log ${Thread.currentThread().id}") }
+
+        NativeCrashCollector.init() { log ->
+            log.printStackTrace()
+//            Log.e("test", "log: $log ${Thread.currentThread().id}")
+        }
+
         setContentView(R.layout.activity_main)
 
         // Example of a call to a native method
