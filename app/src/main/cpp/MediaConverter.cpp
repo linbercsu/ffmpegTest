@@ -764,6 +764,7 @@ namespace {
 
         AVStream *videoStream{};
         AVCodecContext *videoCodecContext{};
+        int64_t lastVideoPts;
         AVCodec *videoEncoder{};
         AVFrame *videoFrame{};
         AVFrame *videoFrameScale{};
@@ -1334,12 +1335,22 @@ namespace {
                 return;
             }
 
+            int64_t p = av_frame_get_best_effort_timestamp(pFrame);
+
             if (!firstVideoPtsGot) {
                 firstVideoPtsGot = true;
-                firstVideoPts = pFrame->pts;
-            }
 
-            int64_t p = pFrame->pts - firstVideoPts;
+                lastVideoPts = p;
+
+//                firstVideoPts = pFrame->pts;
+            } else {
+                if (p <= lastVideoPts) {
+                    p = lastVideoPts + 1;
+                }
+
+                lastVideoPts = p;
+            }
+//            int64_t p = pFrame->pts - firstVideoPts;
 
             AVCodecContext *c = videoCodecContext;
 //        __android_log_print(6, "MediaConverter", "write video %d, %d", pFrame->format, c->pix_fmt);
@@ -1681,21 +1692,21 @@ namespace {
 
         static int computeSize(int s, int max) {
             while (s > max) {
-                s = s - 64;
+                s = s - 16;
             }
 
             return s;
         }
 
         static int normalizeSize(int s) {
-            int y = s % 64;
+            int y = s % 16;
             if (y == 0)
                 return s;
 
-            int r = s / 64;
-            int ret = 64 * (r - 1);
+            int r = s / 16;
+            int ret = 16 * (r - 1);
             if (ret <= 0)
-                return 64;
+                return 16;
             else
                 return ret;
         }
