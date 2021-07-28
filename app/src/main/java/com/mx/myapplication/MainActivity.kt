@@ -19,13 +19,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        NativeCrashCollector.Callback { log -> Log.e("test", "log: $log ${Thread.currentThread().id}") }
-
-        NativeCrashCollector.init() { log ->
-            log.printStackTrace()
-//            Log.e("test", "log: $log ${Thread.currentThread().id}")
-        }
-
         setContentView(R.layout.activity_main)
 
         // Example of a call to a native method
