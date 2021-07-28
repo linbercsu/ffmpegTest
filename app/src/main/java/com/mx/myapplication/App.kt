@@ -18,6 +18,14 @@ class App : Application() {
 
         Log.w("test", "onCreate")
 
-        NativeCrashCollector.init(callback)
+        NativeCrashCollector.init(this, null, callback, true)
+
+        NativeCrashCollector.startReport()
+    }
+
+    companion object {
+        init {
+            System.loadLibrary("native-lib")
+        }
     }
 }

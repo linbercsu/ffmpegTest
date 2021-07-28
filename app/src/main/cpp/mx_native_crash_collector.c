@@ -9,10 +9,10 @@
 #include <string.h>
 #include <malloc.h>
 #include <time.h>
-#include <threads.h>
+//#include <threads.h>
 #include <unwind.h>
 
-static pthread_key_t keyJvmDetach;
+//static pthread_key_t keyJvmDetach;
 
 static jmethodID callbackMethod = NULL;
 static jclass callbackClass = NULL;
@@ -25,7 +25,7 @@ typedef struct backtrace_state_t {
 /**
  * callback used when using <unwind.h> to get the trace for the current context
  */
-_Unwind_Reason_Code unwind_callback(struct _Unwind_Context *context, void *arg) {
+static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context *context, void *arg) {
     backtrace_state_t *state = (backtrace_state_t *) arg;
     _Unwind_Word pc = _Unwind_GetIP(context);
     if (pc) {
@@ -82,10 +82,23 @@ static inline void dump_backtrace() {
 }
  */
 
+static JNIEnv *fromVM() {
+    JNIEnv *env = NULL;
+
+    int err = (*callbackVM)->GetEnv(callbackVM, (void **) &env, JNI_VERSION_1_2);
+    if (err != JNI_OK) {
+
+    }
+
+    return env;
+}
+
+/*
 JNIEnv *fromVM() {
     JNIEnv *env = NULL;
 
     int err = (*callbackVM)->GetEnv(callbackVM, (void **) &env, JNI_VERSION_1_2);
+    __android_log_print(6, "test", "fromVM %d %d", err, __LINE__);
     if (err != JNI_OK) {
         if (err != JNI_EDETACHED) {
             if (err == JNI_EVERSION) {
@@ -94,11 +107,13 @@ JNIEnv *fromVM() {
         }
 
         err = (*callbackVM)->AttachCurrentThread(callbackVM, &env, NULL);
+        __android_log_print(6, "test", "fromVM %d %d", err, __LINE__);
         if (err != JNI_OK) {
         }
 
         // Register detach function on thread exit.
         err = pthread_setspecific(keyJvmDetach, callbackVM);
+        __android_log_print(6, "test", "fromVM %d %d", err, __LINE__);
         if (err != 0) {
         }
 
@@ -106,6 +121,7 @@ JNIEnv *fromVM() {
 
     return env;
 }
+*/
 
 static inline uintptr_t pc_from_ucontext(ucontext_t *uc) {
 #if defined(__aarch64__)
@@ -129,18 +145,18 @@ static inline uintptr_t pc_from_ucontext(ucontext_t *uc) {
 #endif
 }
 
-static int arch() {
+static const char* arch() {
 #if defined(__aarch64__)
-    return 1;
+    return "arm64";
 #elif (defined(__arm__))
-    return 0;
+    return "armv7";
 #elif (defined(__x86_64__))
-    return 2;
+    return "x86_64";
 #elif (defined(__i386))
-  return 3;
+  return "x86";
 #endif
 
-    return 9;
+    return "unknown";
 }
 
 static const int signal_array[] = {SIGILL, SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGSTKFLT, SIGSYS};
@@ -169,18 +185,19 @@ static const char *find_name(const char *lib_name) {
     return name;
 }
 
-static void mx_write_to_file(const char *content) {
+
+static void mx_write_to_file(char* path, const char *content) {
     time_t rawtime;
     time(&rawtime);
 
-    char path[1024];
-    memset(path, 0, 1024);
+//    char path[1024];
+//    memset(path, 0, 1024);
 
-#if defined(__LP64__)
-    sprintf(path, "%s/%s_%ld.txt", targetDir, "crash", rawtime);
-#else
-    sprintf(path, "%s/%s_%d.log", targetDir, name, rawtime);
-#endif
+//#if defined(__LP64__)
+    sprintf(path, "%s/%s_%ld.txt", targetDir, "nc", rawtime);
+//#else
+//    sprintf(path, "%s/%s_%ld.txt", targetDir, "nc", rawtime);
+//#endif
 
     FILE *pFile = fopen(path, "w");
     if (pFile == NULL)
@@ -191,6 +208,7 @@ static void mx_write_to_file(const char *content) {
 
     fclose(pFile);
 }
+
 
 /*
 static void mx_write(const char *lib_name, int code, int si_code, uintptr_t pc) {
@@ -249,11 +267,14 @@ static inline void format(char* str, const char* libName, const char* symbol, vo
 }
 
 static void mx_signal_handle(int code, siginfo_t *si, void *t) {
-    
+    __android_log_print(6, "nc", "mx_signal_handle %d %d", code, si->si_code);
     int strSize = 1920;
     char stackStr[strSize];
     memset(stackStr, 0, strSize);
     char* str = &stackStr[0];
+
+    sprintf(str, "arch %s signal %d code %d\n", arch(), code, si->si_code);
+    str = &stackStr[strlen(stackStr)];
 
     uintptr_t pc = pc_from_ucontext((ucontext_t *) t);
 
@@ -272,8 +293,6 @@ static void mx_signal_handle(int code, siginfo_t *si, void *t) {
 //        mx_write(info.dli_fname, code, si->si_code, addr_relative);
     }
 
-//    dump_backtrace();
-
     const size_t count = 30;
     void* buffer[count];
     backtrace_state_t state = {buffer, buffer + count};
@@ -283,7 +302,7 @@ static void mx_signal_handle(int code, siginfo_t *si, void *t) {
 
     for (size_t idx = 0; idx < max; ++idx) {
         const void* addr = buffer[idx];
-        const char* symbol = "";
+        const char* symbol;
 
         Dl_info info1;
         if (dladdr(addr, &info1) && info1.dli_fname != NULL) {
@@ -301,11 +320,23 @@ static void mx_signal_handle(int code, siginfo_t *si, void *t) {
         }
     }
 
-//    mx_write_to_file(path);
-    JNIEnv *env = fromVM();
+    char filePath[1024];
+    memset(filePath, 0, 1024);
 
-    jstring log = (*env)->NewStringUTF(env, stackStr);
-    (*env)->CallStaticVoidMethod(env, callbackClass, callbackMethod, log);
+    mx_write_to_file(filePath, stackStr);
+
+    JNIEnv *env = fromVM();
+    jboolean check = 1;
+    if (env != NULL) {
+        jstring log = (*env)->NewStringUTF(env, stackStr);
+        (*env)->CallStaticVoidMethod(env, callbackClass, callbackMethod, log);
+        check = (*env)->ExceptionCheck(env);
+        __android_log_print(6, "nc", "mx_signal_handle call java %d", check);
+    }
+    if (check == 0) {
+        remove(filePath);
+//        mx_write_to_file(stackStr);
+    }
 
     for (int i = 0; i < SIGNALS_LEN; i++) {
         if (signal_array[i] == code) {
@@ -331,7 +362,7 @@ static void mx_signal_handle(int code, siginfo_t *si, void *t) {
 }
 
 
-JNIEXPORT void mx_crash_collect_init(const char *dir) {
+static void mx_crash_collect_init(const char *dir) {
 
     size_t length = strlen(dir);
     targetDir = malloc(length + 1);
@@ -361,16 +392,16 @@ JNIEXPORT void mx_crash_collect_init(const char *dir) {
 JNIEXPORT void JNICALL
 Java_com_mxtech_NativeCrashCollector_nativeInitClass(
         JNIEnv *env,
-        jclass clazz) {
+        jclass clazz, jstring dir) {
     callbackClass = (*env)->NewGlobalRef(env, clazz);
 //    callbackClass = clazz;
     callbackMethod = (*env)->GetStaticMethodID(env, clazz, "onNativeCrash",
                                                "(Ljava/lang/String;)V");
     (*env)->GetJavaVM(env, &callbackVM);
-//    jboolean copy;
-//    const char *dirStr = (*env)->GetStringUTFChars(env, dir, &copy);
+    jboolean copy;
+    const char *dirStr = (*env)->GetStringUTFChars(env, dir, &copy);
 //
-    mx_crash_collect_init("/sdcard/test1/hls");
+    mx_crash_collect_init(dirStr);
 
-//    (*env)->ReleaseStringUTFChars(env, dir, dirStr);
+    (*env)->ReleaseStringUTFChars(env, dir, dirStr);
 }
