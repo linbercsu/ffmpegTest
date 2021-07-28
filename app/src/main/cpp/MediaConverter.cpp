@@ -31,6 +31,8 @@ extern AVCodec ff_libx264_encoder;
 #define STREAM_FRAME_RATE 25 /* 25 images/s */
 
 namespace {
+    const int SCALE_BASE = 32;
+
     class OutputStream;
 
     class InputStream;
@@ -1693,21 +1695,21 @@ namespace {
 
         static int computeSize(int s, int max) {
             while (s > max) {
-                s = s - 16;
+                s = max;
             }
 
             return s;
         }
 
         static int normalizeSize(int s) {
-            int y = s % 16;
+            int y = s % SCALE_BASE;
             if (y == 0)
                 return s;
 
-            int r = s / 16;
-            int ret = 16 * (r - 1);
+            int r = s / SCALE_BASE;
+            int ret = SCALE_BASE * r;
             if (ret <= 0)
-                return 16;
+                return SCALE_BASE;
             else
                 return ret;
         }
