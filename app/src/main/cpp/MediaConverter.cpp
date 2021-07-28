@@ -474,6 +474,7 @@ namespace {
                 audio_stream = fmt_ctx->streams[audio_stream_idx];
                 duration = audio_stream->duration;
 
+                __android_log_print(6, "MediaConverter", "find audio stream %d", audio_stream->codecpar->codec_id);
                 if (duration < 0) {
                     duration = av_rescale_q(fmt_ctx->duration,
                                             AV_TIME_BASE_Q,
@@ -504,7 +505,7 @@ namespace {
                 height = video_dec_ctx->height;
                 pix_fmt = video_dec_ctx->pix_fmt;
 
-                __android_log_print(6, "MediaConverter", "find video stream %d", pix_fmt);
+                __android_log_print(6, "MediaConverter", "find video stream %d %d", pix_fmt, video_stream->codecpar->codec_id);
 
                 callback->onVideoStream(video_dec_ctx, video_stream);
             }
@@ -551,7 +552,7 @@ namespace {
 
             /* flush the decoders */
             if (video_dec_ctx)
-                decode_packet(video_dec_ctx, nullptr);
+                decode_packet_video(video_dec_ctx, nullptr);
             if (audio_dec_ctx)
                 decode_packet(audio_dec_ctx, nullptr);
 
