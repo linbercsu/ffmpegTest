@@ -458,7 +458,17 @@ public class NXAvcEncoder {
 
         try
         {
-            inputBufferIndex = m_mediaCodec.dequeueInputBuffer(-1);
+            inputBufferIndex = m_mediaCodec.dequeueInputBuffer(1000 * 1000);
+            if (inputBufferIndex < 0) {
+                Log.e(TAG, "encodeVideoFromBuffer no input buffer.");
+                drainOutputBuffer();
+                inputBufferIndex = m_mediaCodec.dequeueInputBuffer(1000 * 1000 * 8);
+
+                if (inputBufferIndex < 0) {
+                    Log.e(TAG, "encodeVideoFromBuffer still no input buffer.");
+                }
+            }
+
             if (inputBufferIndex >= 0) {
 //                long pts = computePresentationTime(m_getnerateIndex);
                 ByteBuffer inputBuffer = getInputBufferByIdx(inputBufferIndex);
