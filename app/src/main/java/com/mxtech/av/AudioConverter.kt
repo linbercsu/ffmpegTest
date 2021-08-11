@@ -8,8 +8,8 @@ class AudioConverter(source: String, target: String, format: String, private val
         ptr = nativeInit(source, target, format)
     }
 
-    fun convert(): String? {
-        return nativeConvert(ptr)
+    fun convert(audioIndex: Int = 0): String? {
+        return nativeConvert(ptr, audioIndex)
     }
 
     fun stop() {
@@ -29,7 +29,7 @@ class AudioConverter(source: String, target: String, format: String, private val
     }
 
     private external fun nativeInit(source: String, target: String, format: String): Long
-    private external fun nativeConvert(ptr: Long): String?
+    private external fun nativeConvert(ptr: Long, audioTrackIndex: Int = 0): String?
     private external fun nativeStop(ptr: Long)
     private external fun nativeRelease(ptr: Long)
 

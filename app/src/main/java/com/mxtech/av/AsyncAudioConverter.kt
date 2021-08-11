@@ -5,7 +5,7 @@ import android.util.Log
 //import com.mxplay.logger.ZenLogger
 import java.io.File
 
-class AsyncAudioConverter(private val source: String, private val target: String, private val format: String, private val callback: (Boolean)->Unit) : AsyncTask<Void, Void, Boolean>() {
+class AsyncAudioConverter(private val source: String, private val target: String, private val format: String, private val audioIndex: Int, private val callback: (Boolean)->Unit) : AsyncTask<Void, Void, Boolean>() {
     private var audioConverter: AudioConverter? = null
     override fun doInBackground(vararg params: Void?): Boolean {
         val file = File(target)
@@ -21,7 +21,7 @@ class AsyncAudioConverter(private val source: String, private val target: String
                 Log.e("test", "progress on $it")
             }
         }
-        val error = audioConverter?.convert()
+        val error = audioConverter?.convert(audioIndex)
         synchronized(this) {
             audioConverter?.release()
             audioConverter = null
