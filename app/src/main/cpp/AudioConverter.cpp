@@ -37,7 +37,7 @@ namespace {
 
         ~AudioConverter() noexcept;
 
-        const char *convert();
+        const char *convert(int index_audio_track);
 
         void cancel();
 
@@ -326,15 +326,37 @@ namespace {
             return 0;
         }
 
+        static int find_audio_stream(AVFormatContext *formatContext, enum AVMediaType type,
+                                     int index_audio_track) {
+            unsigned int streams = formatContext->nb_streams;
+
+            int ret = -1;
+            if (index_audio_track < streams) {
+                for (int i = 0; i < streams; ++i) {
+                    AVMediaType codec_type = formatContext->streams[i]->codec->codec_type;
+                    __android_log_print(6, "AudioConverter", "i:%d  codec_type:%d index_audio_track:%d", i, codec_type, index_audio_track);
+                    if (codec_type == AVMEDIA_TYPE_AUDIO && i == index_audio_track) {
+                        ret = i;
+                    }
+                }
+            }
+            __android_log_print(6, "AudioConverter", "find input ret:%d", ret);
+            if (ret < 0) {
+                ret = av_find_best_stream(formatContext, type, -1, -1, nullptr, 0);
+            }
+            __android_log_print(6, "AudioConverter", "output ret:%d", ret);
+            return ret;
+        }
+
         static void open_codec_context(int *stream_idx,
                                        AVCodecContext **dec_ctx, AVFormatContext *formatContext,
-                                       enum AVMediaType type) {
+                                       enum AVMediaType type, int index_audio_track) {
             int ret, stream_index;
             AVStream *st;
             const AVCodec *dec;
             AVDictionary *opts = nullptr;
 
-            ret = av_find_best_stream(formatContext, type, -1, -1, nullptr, 0);
+            ret = find_audio_stream(formatContext, type, index_audio_track);
             if (ret < 0) {
                 throw ConvertException("stream error: audio stream not found.");
 //            fprintf(stderr, "Could not find %s stream in input file '%s'\n",
@@ -427,9 +449,10 @@ namespace {
 
         }
 
-        void init() {
+        void init(int index_audio_track) {
+
             src_filename = sourcePath.c_str();
-            __android_log_print(6, "AudioConverter", "init %s", src_filename);
+            __android_log_print(6, "AudioConverter", "init %s index_audio_track:%d", src_filename, index_audio_track);
             int ret;
             /* open input file, and allocate format context */
             if ((ret = avformat_open_input(&fmt_ctx, src_filename, nullptr, nullptr)) < 0) {
@@ -447,7 +470,7 @@ namespace {
                         av_err2str(ret));
             }
 
-            open_codec_context(&audio_stream_idx, &audio_dec_ctx, fmt_ctx, AVMEDIA_TYPE_AUDIO);
+            open_codec_context(&audio_stream_idx, &audio_dec_ctx, fmt_ctx, AVMEDIA_TYPE_AUDIO, index_audio_track);
             audio_stream = fmt_ctx->streams[audio_stream_idx];
 
             duration = audio_stream->duration;
@@ -984,9 +1007,9 @@ namespace {
 
     AudioConverter::~AudioConverter() noexcept = default;
 
-    const char *AudioConverter::convert() {
+    const char *AudioConverter::convert(int index_audio_track) {
         try {
-            inputStream->init();
+            inputStream->init(index_audio_track);
             inputStream->start();
 //        inputStream.reset();
 //        target.reset();
@@ -1023,9 +1046,9 @@ namespace {
     }
 
     jstring nativeConvert(JNIEnv *env,
-                          jobject  /*thzz*/, jlong ptr) {
+                          jobject  /*thzz*/, jlong ptr, jint index_audio_track) {
         auto *converter = reinterpret_cast<AudioConverter *>(ptr);
-        const char *error = converter->convert();
+        const char *error = converter->convert(index_audio_track);
         if (error == nullptr)
             return nullptr;
 
@@ -1053,7 +1076,7 @@ namespace {
     const JNINativeMethod methods[] =
             {
                     {"nativeInit",    "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)J", (void *) nativeInit},
-                    {"nativeConvert", "(J)Ljava/lang/String;",                                     (void *) nativeConvert},
+                    {"nativeConvert", "(JI)Ljava/lang/String;",                                    (void *) nativeConvert},
                     {"nativeStop",    "(J)V",                                                      (void *) nativeStop},
                     {"nativeRelease", "(J)V",                                                      (void *) nativeRelease},
             };
