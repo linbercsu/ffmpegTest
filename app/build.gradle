@@ -14,6 +14,10 @@ android {
         versionCode 1
         versionName "1.0"
 
+        packagingOptions {
+            exclude "**/libyuv.so"
+        }
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
