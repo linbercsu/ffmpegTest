@@ -4,6 +4,7 @@ import android.os.AsyncTask
 import android.util.Log
 //import com.mxplay.logger.ZenLogger
 import java.io.File
+import java.util.concurrent.Executor
 
 class AsyncMediaConverter2(private val source: String, private val target: String, private val format: String, private val start: Long = -1, private val duration: Long = -1, private val audioIndex: Int = -1, private val videoIndex: Int = -1, private val callback: (Boolean)->Unit) : AsyncTask<Void, Void, Boolean>() {
     private var converter: MediaConverter2? = null
@@ -48,6 +49,10 @@ class AsyncMediaConverter2(private val source: String, private val target: Strin
         }
 
         return false
+    }
+
+    fun start(executor: Executor) {
+        executeOnExecutor(executor)
     }
 
     fun stop() {

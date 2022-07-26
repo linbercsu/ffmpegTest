@@ -3,15 +3,18 @@ package com.mx.myapplication
 import android.app.Activity
 import android.content.Intent
 import android.os.AsyncTask
-import android.os.Bundle
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import android.util.Log
+import android.widget.TextView
+import com.mxtech.NativeCrashCollector
 import com.mxtech.av.AsyncAudioConverter
 import com.mxtech.av.AsyncMediaConverter
+import com.mxtech.av.AsyncMediaConverter2
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var audioConverter: AsyncMediaConverter
+    private lateinit var audioConverter: AsyncMediaConverter2
     private lateinit var converter: AsyncAudioConverter
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,20 +27,20 @@ class MainActivity : AppCompatActivity() {
 //        textView.text = stringFromJNI()
 //        Log.e("test", "test: max: ${max()}")
 
-//            audioConverter = AsyncMediaConverter("/sdcard/test1/big.mp4", "/sdcard/test1/dash/test.mpd", "dash") {
-//            audioConverter = AsyncMediaConverter("/storage/emulated/0/Movies2/3000_videos/a.mp4", "/storage/emulated/0/Movies2/3000_videos/dash/test.mpd", "dash") {
+            audioConverter = AsyncMediaConverter2("/sdcard/test1/big.mp4", "/sdcard/test1/dash/test1.mp4", "mp4", 40000000, 1000000 * 60) {
+//            audioConverter = AsyncMediaConverter("/sdcard/1/binkvideo_binkaudio_rdft.bik", "/sdcard/1/test/test.mpd", "dash") {
+
+
+            }
+//
+        audioConverter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+//
+//            converter = AsyncAudioConverter("/sdcard/test1/10.wmv", "/sdcard/test1/wmv.mp3", "mp3") {
 //
 //
 //            }
 //
-//        audioConverter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
-//
-//        val path = "/sdcard/multi/multi_audio_track.mkv"
-        val path = "/sdcard/multi/output.mkv"
-        converter = AsyncAudioConverter(path, "/sdcard/multi/output.mp3", "mp3", 4) {
-        }
-
-        converter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+//        converter.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
 
         textView.setOnClickListener {
             audioConverter.stop()
