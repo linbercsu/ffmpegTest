@@ -15,6 +15,7 @@ namespace next {
 
         void resetStartPts(int64_t pts, int64_t startTime);
         void calculatePtsWithTime(int64_t now);
+        void calculatePts();
         void elapse(int64_t e);
         void reset(int64_t start);
         void resetWithPts(int64_t start, int64_t pts);

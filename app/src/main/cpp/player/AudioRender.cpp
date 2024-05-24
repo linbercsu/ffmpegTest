@@ -364,30 +364,44 @@ namespace next {
                 if (frame == nullptr) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 } else {
-                    while (!isStopped()) {
-                        auto now = nowMicro();
+                    if (!isStopped()) {
+//                        auto now = nowMicro();
 
                         if (mFirstFrame) {
                             mFirstFrame = false;
-                            startTime = now;
-                            mMediaClockRef->resetStartPts(0, now);
+//                            startTime = now;
+                            mMediaClockRef->resetStartPts(0, nowMicro());
                             next_log_tag("Audio", "output, first pts %ld, %d", frame->pts, __LINE__);
                         }
-                        auto ret = mAudioDeviceRef->write(frame);
-                        mMediaClockRef->calculatePtsWithTime(now);
+                        //may be write partical
+                        auto written = 0;
+                        while (!isStopped()) {
+                            auto ret = AAudioStream_write(mAudioDeviceRef->stream, frame->data[0] + written, frame->nb_samples - written, 500000000);
+                            mMediaClockRef->calculatePts();
+                            if (ret < 0) {
+                                next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
+                                throw std::bad_function_call();
+                                break;
+                            }
 
-                        if (ret > 0) {
-                            mSampleCount += frame->nb_samples;
-                            break;
-                        }
+                            if (ret == 0) {
+                                next_log_tag("Audio", "AudioOutput, ret = 0 %d", __LINE__);
+                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                            } else {
 
-                        if (ret == 0) {
-                            next_log_tag("Audio", "AudioOutput, ret = 0 %d", __LINE__);
-                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        } else {
-                            next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
-                            break;
+                                //ret > 0
+                                written += ret;
+                                if (written == frame->nb_samples) {
+                                    break;
+                                }
+
+                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                            }
+//                            mMediaClockRef->calculatePtsWithTime(now);
                         }
+//                        auto ret = mAudioDeviceRef->write(frame);
+
+
                     }
                 }
             }

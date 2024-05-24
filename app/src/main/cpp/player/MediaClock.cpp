@@ -4,7 +4,21 @@
 
 #include "MediaClock.h"
 
+#include <chrono>
+
+using namespace std::chrono;
+
 namespace next {
+
+    namespace {
+        int64_t nowMicro() {
+            microseconds ms = duration_cast< microseconds >(
+                    system_clock::now().time_since_epoch()
+            );
+
+            return ms.count();
+        }
+    }
 
     int64_t MediaClock::getPts() {
         return mPts.load();
@@ -47,6 +61,15 @@ namespace next {
     }
 
     void MediaClock::calculatePtsWithTime(int64_t now) {
+        int64_t last = mStartTime.load();
+        auto elapsed = now - last;
+        if (elapsed > 0) {
+            mPts.store(mStartPts + elapsed);
+        }
+    }
+
+    void MediaClock::calculatePts() {
+        auto now = nowMicro();
         int64_t last = mStartTime.load();
         auto elapsed = now - last;
         if (elapsed > 0) {
