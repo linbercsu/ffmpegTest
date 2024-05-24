@@ -65,6 +65,20 @@ namespace next {
         throw std::bad_cast();
     }
 
+
+    class DataContext {
+    public:
+        ~DataContext() {
+            if (decoderContext != nullptr) {
+                avcodec_free_context(&decoderContext);
+                decoderContext = nullptr;
+            }
+        }
+
+        AVCodecContext* decoderContext{nullptr};
+        AVCodec* decoder{nullptr};
+    };
+
     class AudioFrameBuffer {
 
     public:
@@ -151,6 +165,16 @@ namespace next {
     public:
         AudioDevice() {
 
+        }
+
+        void clear() {
+//            AAudioStream_requestStop(stream);
+            AAudioStream_close(stream);
+
+            if (swr_ctx != nullptr) {
+                swr_free(&swr_ctx);
+                swr_ctx = nullptr;
+            }
         }
 
         void withSourceCodecParameter(AVCodecParameters *parameters) {
@@ -278,24 +302,6 @@ namespace next {
 
                 queue.pushFrame(newFrame);
             }
-
-            /*
-            ret = audioFrameBuffer.receiveFrame(frame, samplesPerFrame);
-            if (ret >= 0) {
-
-
-//            while (ret >= 0) {
-                int64_t pts = av_rescale_q(samples_count,
-                                           (AVRational) {1, sampleRate},
-                                           AV_TIME_BASE_Q);
-
-                frame->pts = pts;
-                samples_count += frame->nb_samples;
-
-                queue.pushFrame(frame);
-            }
-             */
-
         }
 
         int write(AVFrame* frame) {
@@ -332,13 +338,33 @@ namespace next {
             mThread = new std::thread(&AudioOutput::run, this);
         }
 
+        ~AudioOutput() {
+            delete mThread;
+            mThread = nullptr;
+        }
+
+        void stop() {
+            mStopped.store(true);
+            mThread->join();
+        }
+
+        bool isStopped() {
+            return mStopped.load();
+        }
+
         void run() {
-            while (true) {
-                AVFrame *frame = mFrameQueueRef->pop();
+            AVFrame *frame = nullptr;
+            while (!isStopped()) {
+                if (frame != nullptr) {
+                    av_frame_free(&frame);
+                    frame = nullptr;
+                }
+
+                frame = mFrameQueueRef->pop();
                 if (frame == nullptr) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 } else {
-                    while (true) {
+                    while (!isStopped()) {
                         auto now = nowMicro();
 
                         if (mFirstFrame) {
@@ -372,6 +398,7 @@ namespace next {
         }
         
     private:
+        std::atomic_bool mStopped{false};
         std::thread* mThread;
         bool mFirstFrame{true};
         MediaClock* mMediaClockRef;
@@ -383,7 +410,7 @@ namespace next {
         int64_t startTime{0};
     };
 
-    AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueue(pQueue),
+    AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 1024 * 10), mMediaClockRef(clock) {
         mAudioDevice = new AudioDevice();
         mThread = new std::thread(&AudioRender::run, this);
@@ -392,20 +419,40 @@ namespace next {
     }
 
     void AudioRender::run() {
+        mDataContext = new DataContext();
+        runInternal();
+
+        mAudioDevice->clear();
+
+        mFrameQueue.clear();
+
+        delete mDataContext;
+        mDataContext = nullptr;
+
+        if (reusedAudioFrame != nullptr) {
+            av_frame_free(&reusedAudioFrame);
+            reusedAudioFrame = nullptr;
+        }
+    }
+    void AudioRender::runInternal() {
         int ret = 0;
         AVCodecParameters *codecParameters = nullptr;
         AVRational timeBase;
 
-        while (true) {
-            codecParameters = mQueue->getCodecParameters();
+        while (!isStopped()) {
+            codecParameters = mQueueRef->getCodecParameters();
 
             if (codecParameters == nullptr) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
-            timeBase = mQueue->getTimebase();
+            timeBase = mQueueRef->getTimebase();
 
             break;
+        }
+
+        if (isStopped()) {
+            return;
         }
 
         mAudioDevice->withSourceCodecParameter(codecParameters);
@@ -414,16 +461,16 @@ namespace next {
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
 
         auto dec_ctx = avcodec_alloc_context3(decoder);
-
+        mDataContext->decoderContext = dec_ctx;
         ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
         dec_ctx->pkt_timebase = timeBase;
 
         AVDictionary *opts = nullptr;
         ret = avcodec_open2(dec_ctx, decoder, &opts);
 
-        auto videoFrame = av_frame_alloc();
-        while (true) {
-            AVPacket *pkt = mQueue->getPkt();
+        reusedAudioFrame = av_frame_alloc();
+        while (!isStopped()) {
+            AVPacket *pkt = mQueueRef->getPkt();
 
             if (pkt == nullptr) {
 //                render();
@@ -431,7 +478,7 @@ namespace next {
                 continue;
             }
 
-            decode(dec_ctx, pkt, videoFrame);
+            decode(dec_ctx, pkt, reusedAudioFrame);
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
             av_packet_unref(pkt);
@@ -519,7 +566,7 @@ namespace next {
 
     void AudioRender::render() {
         if (mFrameQueue.isEmpty()) {
-            if (mQueue->isEnd()) {
+            if (mQueueRef->isEnd()) {
                 if (!lastRender) {
                     lastRender = true;
                     next_log_tag("render", "last frame %d", __LINE__);
@@ -574,5 +621,15 @@ namespace next {
             }
         }
          */
+    }
+
+    void AudioRender::stop() {
+        mAudioOutput->stop();
+        mStopped.store(true);
+        mThread->join();
+    }
+
+    bool AudioRender::isStopped() {
+        return mStopped.load();
     }
 }

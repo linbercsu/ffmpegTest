@@ -7,6 +7,7 @@
 #include <thread>
 #include <list>
 #include <mutex>
+#include <atomic>
 #include <GLES2/gl2.h>
 #include "VideoPackageQueue.h"
 #include "FrameQueue.h"
@@ -19,9 +20,13 @@ struct AVFrame;
 
 namespace next {
 
+    class DataContext;
+
     class VideoRender {
     public:
         VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
+        ~VideoRender();
+        void stop();
 
         void run();
 
@@ -30,8 +35,9 @@ namespace next {
         void onDrawFrame();
 
         void onSurfaceChanged(int w, int h);
-
     private:
+        void runInternal();
+        bool isStopped();
         void decode(AVCodecContext *dec, const AVPacket *package, struct AVFrame *frame);
 
         void onFrame(struct AVFrame *frame, AVRational timebase);
@@ -42,7 +48,8 @@ namespace next {
     private:
         struct AVFrame* mCurrentFrame{nullptr};
         std::mutex mFrameLock;
-        VideoPackageQueue* mQueue;
+        VideoPackageQueue* mQueueRef;
+        std::atomic_bool mStopped{false};
 
         std::thread* mThread{nullptr};
         FrameQueue mFrameQueue;
@@ -51,6 +58,8 @@ namespace next {
         nx_effect::BaseEffect* effect;
         int width;
         int height;
+        struct AVFrame* reusedVideoFrame{nullptr};
+        DataContext* mDataContext{nullptr};
     };
 }
 

@@ -18,12 +18,19 @@ namespace next {
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
     }
 
+    Player::~Player() {
+        delete mAudioRender;
+        delete mVideoRender;
+    }
+
     void Player::pause() {
         mReader.pause();
     }
 
     void Player::stop() {
-        mReader.start();
+        mReader.stop();
+        mAudioRender->stop();
+        mVideoRender->stop();
     }
 
     void Player::seek() {

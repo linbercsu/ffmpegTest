@@ -26,6 +26,7 @@ namespace next {
 
         void end();
         bool isEnd();
+        void clear();
     private:
         bool mEnd{false};
         bool mCodecParametersGot{false};

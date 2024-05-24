@@ -13,6 +13,8 @@ namespace next {
     class FrameQueue {
     public:
         FrameQueue(int size);
+        ~FrameQueue();
+        void clear();
         bool isFull();
         bool isEmpty() const {
             return mFrameList.empty();

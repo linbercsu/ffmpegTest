@@ -14,6 +14,7 @@ namespace next {
     class LockFrameQueue {
     public:
         LockFrameQueue(int size);
+        void clear();
         bool isFull();
         bool isEmpty() const {
             return mFrameList.empty();

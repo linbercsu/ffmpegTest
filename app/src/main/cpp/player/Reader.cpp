@@ -16,21 +16,28 @@ extern "C" {
 namespace next {
     class ContextData {
     public:
+        ~ContextData() {
+            if (fmt_ctx != nullptr) {
+                avformat_close_input(&fmt_ctx);
+                fmt_ctx = nullptr;
+            }
+        }
+
         AVFormatContext *fmt_ctx = nullptr;
-        AVCodecContext *audio_dec_ctx = nullptr;
-        AVCodecContext *video_dec_ctx = nullptr;
+//        AVCodecContext *audio_dec_ctx = nullptr;
+//        AVCodecContext *video_dec_ctx = nullptr;
 //        int64_t audioDurationAdded = 0;
 //        int64_t videoDurationAdded = 0;
-        int width = 0, height = 0;
-        enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
-        AVStream *audio_stream = nullptr;
-        AVStream *video_stream = nullptr;
-        const char *src_filename = nullptr;
-        int audio_stream_idx = -1;
-        int video_stream_idx = -1;
-        AVFrame *mAudioFrame = nullptr;
-        AVFrame *videoFrame = nullptr;
-        AVPacket *pkt = nullptr;
+//        int width = 0, height = 0;
+//        enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
+//        AVStream *audio_stream = nullptr;
+//        AVStream *video_stream = nullptr;
+//        const char *src_filename = nullptr;
+//        int audio_stream_idx = -1;
+//        int video_stream_idx = -1;
+//        AVFrame *mAudioFrame = nullptr;
+//        AVFrame *videoFrame = nullptr;
+//        AVPacket *pkt = nullptr;
     };
 
 
@@ -39,8 +46,22 @@ namespace next {
         mThread = new std::thread(&Reader::run, this);
     }
 
+    Reader::~Reader() {
+        delete mThread;
+        mThread = nullptr;
+
+    }
+
     void Reader::run() {
         open();
+
+        if (mContextData != nullptr) {
+            delete mContextData;
+            mContextData = nullptr;
+        }
+
+        mVideoPktQueueRef->clear();
+        mAudioPktQueueRef->clear();
     }
 
     void Reader::open() {
@@ -68,20 +89,28 @@ namespace next {
 
         mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar, video_stream->time_base);
 
+        AVPacket * pkt = nullptr;
         auto pktCount = 0;
-        while (true) {
-            AVPacket * pkt = av_packet_alloc();
+        while (!isStopped()) {
+            if (pkt != nullptr) {
+                av_packet_free(&pkt);
+                pkt = nullptr;
+            }
+
+            pkt = av_packet_alloc();
             ret = av_read_frame(fmt_ctx, pkt);
             if (ret < 0) {
                 av_packet_free(&pkt);
+                pkt = nullptr;
                 next_log("av_read_frame ret %d, %s, %d, %d", ret, av_err2str(ret), pktCount, __LINE__);
                 break;
             }
 
             pktCount++;
             if (pkt->stream_index == audio_stream_index) {
-                while (true) {
+                while (!isStopped()) {
                     if (mAudioPktQueueRef->enqueue(pkt)) {
+                        pkt = nullptr;
                         break;
                     }
 
@@ -90,8 +119,9 @@ namespace next {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
             } else if (pkt->stream_index == video_stream_index) {
-                while (true) {
+                while (!isStopped()) {
                     if (mVideoPktQueueRef->enqueue(pkt)) {
+                        pkt = nullptr;
                         break;
                     }
 
@@ -102,7 +132,21 @@ namespace next {
             }
         }
 
+        if (pkt != nullptr) {
+            av_packet_free(&pkt);
+            pkt = nullptr;
+        }
+
         mVideoPktQueueRef->end();
+
+        while (!isStopped()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+
+    void Reader::stop() {
+        stopped.store(true);
+        mThread->join();
     }
 
     void Reader::start() {
@@ -113,11 +157,11 @@ namespace next {
 
     }
 
-    void Reader::stop() {
+    void Reader::seek() {
 
     }
 
-    void Reader::seek() {
-
+    bool Reader::isStopped() {
+        return stopped.load();
     }
 }

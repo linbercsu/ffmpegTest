@@ -36,6 +36,10 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
 
     }
 
+    public void stop() {
+        nativeStop(ref);
+    }
+
     @Override
     public void onSurfaceCreated(GL10 gl10, EGLConfig eglConfig) {
         nativeOnSurfaceCreated(ref);
@@ -54,6 +58,8 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     private native long createPlayer(String path);
     private native void start(long ref);
     private native void pause(long ref);
+    private native void nativeStop(long ref);
+
     private native void nativeOnSurfaceCreated(long ref);
     private native void nativeOnSurfaceChanged(long ref, int w, int h);
     private native void nativeOnDrawFrame(long ref);

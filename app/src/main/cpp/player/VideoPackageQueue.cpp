@@ -53,6 +53,16 @@ namespace next {
         return pkt;
     }
 
+    void VideoPackageQueue::clear() {
+        std::lock_guard<std::mutex> l(mLock);
+        for (auto pkt : mPktList) {
+            auto ptr = pkt;
+            av_packet_unref(ptr);
+            av_packet_free(&ptr);
+        }
+        mPktList.clear();
+    }
+
     void VideoPackageQueue::end() {
         std::lock_guard<std::mutex> l(mLock);
         mEnd = true;

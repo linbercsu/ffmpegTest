@@ -18,6 +18,7 @@ namespace next {
 
     public:
         Player(std::string path);
+        ~Player();
         void start();
         void pause();
         void stop();

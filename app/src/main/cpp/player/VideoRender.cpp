@@ -20,16 +20,17 @@ extern "C" {
 namespace next {
     bool lastRender = false;
 
-    static float calculateRate(int frameW, int frameH, int surfaceW, int surfaceH) {
-        float rate1 = surfaceW / (float )frameW;
-        float rate2 = surfaceH / (float )frameH;
-
-        if (rate1 > rate2) {
-            return rate2;
+    class DataContext {
+    public:
+        ~DataContext() {
+            if (decoderContext != nullptr) {
+                avcodec_free_context(&decoderContext);
+                decoderContext = nullptr;
+            }
         }
-
-        return rate1;
-    }
+        AVCodecContext* decoderContext{nullptr};
+        AVCodec* decoder{nullptr};
+    };
 
     static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height) {
         AVFrame *picture;
@@ -73,42 +74,76 @@ namespace next {
     }
 
 
-    VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueue(pQueue),
+    VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 1024 * 50), mClock(clock) {
         mThread = new std::thread(&VideoRender::run, this);
         effect = new nx_effect::ZEffect();
     }
 
+    VideoRender::~VideoRender() {
+        delete mThread;
+        mThread = nullptr;
+
+        if (effect != nullptr) {
+            delete effect;
+            effect = nullptr;
+        }
+    }
+
     void VideoRender::run() {
+        mDataContext = new DataContext();
+        runInternal();
+        mFrameQueue.clear();
+        if (mCurrentFrame != nullptr) {
+            av_frame_free(&mCurrentFrame);
+            mCurrentFrame = nullptr;
+        }
+
+        if (reusedVideoFrame != nullptr) {
+            av_frame_free(&reusedVideoFrame);
+            reusedVideoFrame = nullptr;
+        }
+
+        delete mDataContext;
+        mDataContext = nullptr;
+    }
+
+    void VideoRender::runInternal() {
         int ret = 0;
         AVCodecParameters *codecParameters = nullptr;
         AVRational timeBase;
 
-        while (true) {
-            codecParameters = mQueue->getCodecParameters();
+        while (!isStopped()) {
+            codecParameters = mQueueRef->getCodecParameters();
 
             if (codecParameters == nullptr) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
-            timeBase = mQueue->getTimebase();
+            timeBase = mQueueRef->getTimebase();
 
             break;
         }
 
+        if (isStopped()) {
+            return;
+        }
+
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
 
-        auto dec_ctx = avcodec_alloc_context3(decoder);
+        mDataContext->decoderContext = avcodec_alloc_context3(decoder);
+        auto dec_ctx = mDataContext->decoderContext;
 
         ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
         dec_ctx->pkt_timebase = timeBase;
 
         AVDictionary *opts = nullptr;
         ret = avcodec_open2(dec_ctx, decoder, &opts);
+        mDataContext->decoder = decoder;
 
-        auto videoFrame = av_frame_alloc();
-        while (true) {
-            AVPacket *pkt = mQueue->getPkt();
+        reusedVideoFrame = av_frame_alloc();
+        while (!isStopped()) {
+            AVPacket *pkt = mQueueRef->getPkt();
 
             if (pkt == nullptr) {
                 render();
@@ -116,7 +151,7 @@ namespace next {
                 continue;
             }
 
-            decode(dec_ctx, pkt, videoFrame);
+            decode(dec_ctx, pkt, reusedVideoFrame);
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
             av_packet_unref(pkt);
@@ -165,7 +200,7 @@ namespace next {
 
     void VideoRender::render() {
         if (mFrameQueue.isEmpty()) {
-            if (mQueue->isEnd()) {
+            if (mQueueRef->isEnd()) {
                 if (!lastRender) {
                     lastRender = true;
                     next_log_tag("render", "last frame %d", __LINE__);
@@ -183,7 +218,7 @@ namespace next {
             return;
         }
 
-        while (true) {
+        while (!isStopped()) {
             auto next = mFrameQueue.first();
             auto duration = next->pts - mCurrentFrame->pts;
             int64_t pts = mClock->getPts();
@@ -217,7 +252,7 @@ namespace next {
 
 
         while (ret == AVERROR(EAGAIN)) {
-            while (true) {
+            while (!isStopped()) {
                 ret = avcodec_receive_frame(dec, videoFrame);
                 if (ret < 0) {
                     if (ret == AVERROR_EOF)
@@ -251,7 +286,7 @@ namespace next {
 
 
         // get all the available frames from the decoder
-        while (true) {
+        while (!isStopped()) {
             ret = avcodec_receive_frame(dec, videoFrame);
             if (ret < 0) {
                 // those two return values are special and mean there is no output
@@ -273,7 +308,7 @@ namespace next {
     void VideoRender::onSurfaceCreated() {
         auto *textures = new GLuint[1]; //生成纹理id
         glGenTextures(  //创建纹理对象
-                2, //产生纹理id的数量
+                1, //产生纹理id的数量
                 textures
         );
         texture = textures[0];
@@ -335,5 +370,14 @@ namespace next {
         glViewport(0, 0, w, h/2);
         width = w;
         height = h;
+    }
+
+    void VideoRender::stop() {
+        mStopped.store(true);
+        mThread->join();
+    }
+
+    bool VideoRender::isStopped() {
+        return mStopped.load();
     }
 }

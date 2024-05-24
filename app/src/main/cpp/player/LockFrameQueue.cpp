@@ -21,6 +21,16 @@ namespace next {
 
     }
 
+    void LockFrameQueue::clear() {
+        std::lock_guard<std::mutex> l(mLock);
+        for (auto frame : mFrameList) {
+            auto ptr = frame;
+            av_frame_free(&ptr);
+        }
+
+        mFrameList.clear();
+    }
+
     bool LockFrameQueue::isFull() {
         std::lock_guard<std::mutex> l(mLock);
         return mCurrentSize >= mSize;

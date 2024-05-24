@@ -19,6 +19,18 @@ namespace next {
 
     }
 
+    FrameQueue::~FrameQueue() {
+
+    }
+
+    void FrameQueue::clear() {
+        for (auto frame : mFrameList) {
+            auto ptr = frame;
+            av_frame_free(&ptr);
+        }
+        mFrameList.clear();
+    }
+
     bool FrameQueue::isFull() {
         return mCurrentSize >= mSize;
     }
