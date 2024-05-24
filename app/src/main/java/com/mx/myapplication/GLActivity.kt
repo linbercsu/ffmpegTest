@@ -21,7 +21,7 @@ class GLActivity : AppCompatActivity() {
         glSurfaceView = GLSurfaceView(root.context)
 
         glSurfaceView.setEGLContextClientVersion(2)
-        glSurfaceView.setRenderer(GLVideo("/sdcard/test1/big.mp4"))
+        glSurfaceView.setRenderer(GLVideo("/sdcard/Download/joke.mp4"))
 
         root.addView(glSurfaceView, -1, -1)
     }

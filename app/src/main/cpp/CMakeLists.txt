@@ -70,6 +70,14 @@ add_library( # Sets the name of the library.
         mx_native_crash_collector.c
         MediaConverter.cpp
         mediaconvert/MediaConverter2.cpp
+        player/Player.cpp
+        player/Reader.cpp
+        player/JNIPlayer.cpp
+        player/VideoPackageQueue.cpp
+        player/VideoRender.cpp
+        player/FrameQueue.cpp
+        player/Clock.cpp
+        player/Exception.cpp
         AudioConverter.cpp
         concurrent/Thread.cpp
         GLVideo.cpp
@@ -84,6 +92,7 @@ INCLUDE_DIRECTORIES(
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/effect
         ${CMAKE_SOURCE_DIR}/mediaconvert
+        ${CMAKE_SOURCE_DIR}/player
 #        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/include
         ${CMAKE_SOURCE_DIR}/ffmpeg
         ${CMAKE_SOURCE_DIR}/libyuv/include

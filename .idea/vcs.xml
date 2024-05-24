@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/app/src/main/cpp/ffmpeg" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/app/src/main/ffmpeg" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/app/src/main/cpp/libyuv" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/app/src/main/cpp/x264" vcs="Git" />
   </component>
 </project>

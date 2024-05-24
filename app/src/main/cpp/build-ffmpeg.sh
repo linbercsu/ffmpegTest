@@ -60,6 +60,10 @@ SYSROOT=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
 TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
 PREFIX=$(pwd)/ffmpeg-build/${ARCH_DIR}
 
+if [ ! -e ${CROSS_PREFIX}ar ]; then
+  CROSS_PREFIX=${TOOLCHAIN}/bin/llvm-
+  fi
+
 cd ffmpeg
 
 configure() {
