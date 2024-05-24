@@ -73,8 +73,8 @@ namespace next {
     }
 
 
-    VideoRender::VideoRender(next::VideoPackageQueue *pQueue) : mQueue(pQueue),
-                                                                mFrameQueue(1024 * 1024 * 50) {
+    VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueue(pQueue),
+                                                                mFrameQueue(1024 * 1024 * 50), mClock(clock) {
         mThread = new std::thread(&VideoRender::run, this);
         effect = new nx_effect::ZEffect();
     }
@@ -178,7 +178,7 @@ namespace next {
             setCurrentFrame();
             //render first frame
 
-            mClock.display();
+//            mClock.display();
             next_log_tag("render", "first frame %ld, %d", mCurrentFrame->pts, __LINE__);
             return;
         }
@@ -186,32 +186,22 @@ namespace next {
         while (true) {
             auto next = mFrameQueue.first();
             auto duration = next->pts - mCurrentFrame->pts;
-
-            auto last = mClock.lastDisplayMicro();
-            auto now = mClock.nowMicro();
-
-            auto elapse = now - last;
-            //
-            if (elapse < duration) {
-                if (mFrameQueue.isFull()) {
-                    std::this_thread::sleep_for(std::chrono::microseconds(duration - elapse));
-                    continue;
-                } else {
-                    break;
-                }
-            }
-
-            releaseAndSetCurrentFrame();
-
-//            next_log_tag("render", "render frame %ld, %d", mCurrentFrame->pts, __LINE__);
-            mClock.display();
-            if (mFrameQueue.isFull()) {
-                duration = mFrameQueue.first()->pts - mCurrentFrame->pts;
-                std::this_thread::sleep_for(std::chrono::microseconds(duration));
-                continue;
+            int64_t pts = mClock->getPts();
+            if (pts >= next->pts) {
+                //next frame
+                releaseAndSetCurrentFrame();
             } else {
+                if (mFrameQueue.isFull()) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds (10));
+                    continue;
+                }
                 break;
             }
+
+            if (mFrameQueue.isEmpty()) {
+                break;
+            }
+
         }
     }
 

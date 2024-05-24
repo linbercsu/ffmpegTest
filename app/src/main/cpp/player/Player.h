@@ -6,6 +6,7 @@
 
 #include "Reader.h"
 #include "VideoPackageQueue.h"
+#include "MediaClock.h"
 
 namespace next {
 
@@ -35,6 +36,7 @@ namespace next {
         VideoPackageQueue mVideoPackageQueue;
         VideoPackageQueue mAudioPackageQueue;
         Reader mReader;
+        MediaClock mMediaClock;
     };
 
 

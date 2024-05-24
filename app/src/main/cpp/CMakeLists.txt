@@ -77,7 +77,9 @@ add_library( # Sets the name of the library.
         player/VideoRender.cpp
         player/AudioRender.cpp
         player/FrameQueue.cpp
+        player/LockFrameQueue.cpp
         player/Clock.cpp
+        player/MediaClock.cpp
         player/Exception.cpp
         AudioConverter.cpp
         concurrent/Thread.cpp

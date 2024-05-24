@@ -4,7 +4,8 @@
 
 #pragma once
 #include <thread>
-#include "FrameQueue.h"
+#include "LockFrameQueue.h"
+#include "MediaClock.h"
 
 extern "C" {
 #include "libavutil/rational.h"
@@ -18,10 +19,11 @@ namespace next {
 
     class VideoPackageQueue;
     class AudioDevice;
+    class AudioOutput;
 
     class AudioRender {
     public:
-        AudioRender(next::VideoPackageQueue *pQueue);
+        AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
         void run();
 
     private:
@@ -29,10 +31,12 @@ namespace next {
         void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame);
         void onFrame(struct AVFrame *frame, AVRational timebase);
     private:
+        MediaClock* mMediaClockRef;
         VideoPackageQueue* mQueue;
         AudioDevice* mAudioDevice;
         std::thread* mThread{nullptr};
-        FrameQueue mFrameQueue;
+        LockFrameQueue mFrameQueue;
+        AudioOutput* mAudioOutput;
     };
 }
 

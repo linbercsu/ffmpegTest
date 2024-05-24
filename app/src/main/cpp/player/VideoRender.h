@@ -10,7 +10,7 @@
 #include <GLES2/gl2.h>
 #include "VideoPackageQueue.h"
 #include "FrameQueue.h"
-#include "Clock.h"
+#include "MediaClock.h"
 #include "BaseEffect.h"
 
 struct AVCodecContext;
@@ -21,7 +21,7 @@ namespace next {
 
     class VideoRender {
     public:
-        VideoRender(next::VideoPackageQueue *pQueue);
+        VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
 
         void run();
 
@@ -46,7 +46,7 @@ namespace next {
 
         std::thread* mThread{nullptr};
         FrameQueue mFrameQueue;
-        Clock mClock;
+        MediaClock* mClock;
         GLuint texture;
         nx_effect::BaseEffect* effect;
         int width;

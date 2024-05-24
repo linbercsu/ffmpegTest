@@ -7,6 +7,9 @@
 #include "Exception.h"
 #include <aaudio/AAudio.h>
 #include "Log.h"
+#include <chrono>
+
+using namespace std::chrono;
 
 bool lastRender = false;
 extern "C" {
@@ -17,6 +20,16 @@ extern "C" {
 }
 
 namespace next {
+    namespace {
+        int64_t nowMicro() {
+            microseconds ms = duration_cast< microseconds >(
+                    system_clock::now().time_since_epoch()
+            );
+
+            return ms.count();
+        }
+    }
+
     AVFrame *alloc_audio_frame(enum AVSampleFormat sample_fmt,
                                uint64_t channel_layout, int channelCount,
                                int sample_rate, int nb_samples) {
@@ -136,6 +149,10 @@ namespace next {
 
     class AudioDevice {
     public:
+        AudioDevice() {
+
+        }
+
         void withSourceCodecParameter(AVCodecParameters *parameters) {
             mSourceChannelLayout = parameters->channel_layout;
             mSourceFormat = parameters->format;
@@ -216,7 +233,7 @@ namespace next {
                                           sampleRate, size);
         }
 
-        void convert(AVFrame *oldFrame, FrameQueue& queue) {
+        void convert(AVFrame *oldFrame, LockFrameQueue& queue) {
             int ret;
             int dst_nb_samples;
 
@@ -251,6 +268,14 @@ namespace next {
                 }
                 auto newFrame = getAudioFrame(samplesPerFrame);
                 audioFrameBuffer.receiveFrame(newFrame, samplesPerFrame);
+
+                int64_t pts = av_rescale_q(samples_count,
+                                           (AVRational) {1, sampleRate},
+                                           AV_TIME_BASE_Q);
+
+                newFrame->pts = pts;
+                samples_count += newFrame->nb_samples;
+
                 queue.pushFrame(newFrame);
             }
 
@@ -273,20 +298,14 @@ namespace next {
 
         }
 
-        void write(AVFrame* frame) {
-            while  (true) {
+        int write(AVFrame* frame) {
                 auto ret = AAudioStream_write(stream, frame->data[0], frame->nb_samples, 500000000);
 
-                next_log_tag("Audio", "write: error %d %d, %d", frame->nb_samples, ret, __LINE__);
-                if (ret < 0) {
-                    throw std::bad_alloc();
-                }
-
-                if (ret > 0) {
-                    break;
-                }
-            }
+                return ret;
+//                next_log_tag("Audio", "write: error %d %d, %d", frame->nb_samples, ret, __LINE__);
         }
+
+        friend class AudioOutput;
 
         AAudioStream *stream;
         AudioFrameBuffer audioFrameBuffer;
@@ -304,12 +323,72 @@ namespace next {
         int64_t samples_count{0};
         int32_t samplesPerFrame;
     };
+    
+    class AudioOutput {
+    public:
+        AudioOutput(AudioDevice *pDevice, LockFrameQueue *pQueue, MediaClock* clock):mAudioDeviceRef(pDevice),
+                                                                  mFrameQueueRef(pQueue),
+                                                                  mMediaClockRef(clock){
+            mThread = new std::thread(&AudioOutput::run, this);
+        }
 
-    AudioRender::AudioRender(next::VideoPackageQueue *pQueue) : mQueue(pQueue),
-                                                                mFrameQueue(1024 * 1024 * 10) {
+        void run() {
+            while (true) {
+                AVFrame *frame = mFrameQueueRef->pop();
+                if (frame == nullptr) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } else {
+                    while (true) {
+                        auto now = nowMicro();
+
+                        if (mFirstFrame) {
+                            mFirstFrame = false;
+                            startTime = now;
+                            mMediaClockRef->resetStartPts(0, now);
+                            next_log_tag("Audio", "output, first pts %ld, %d", frame->pts, __LINE__);
+                        }
+                        auto ret = mAudioDeviceRef->write(frame);
+                        mMediaClockRef->calculatePtsWithTime(now);
+
+                        if (ret > 0) {
+                            mSampleCount += frame->nb_samples;
+                            break;
+                        }
+
+                        if (ret == 0) {
+                            next_log_tag("Audio", "AudioOutput, ret = 0 %d", __LINE__);
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        } else {
+                            next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        int64_t calculateDurationInMicro(int sampleCount, int sampleRate) {
+            return (((int64_t)sampleCount) * 1000000)/ sampleRate;
+        }
+        
+    private:
+        std::thread* mThread;
+        bool mFirstFrame{true};
+        MediaClock* mMediaClockRef;
+        AudioDevice* mAudioDeviceRef;
+        LockFrameQueue* mFrameQueueRef;
+        int mSampleCount{0};
+        int64_t startPts{0};
+        int64_t currentPts{0};
+        int64_t startTime{0};
+    };
+
+    AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueue(pQueue),
+                                                                mFrameQueue(1024 * 1024 * 10), mMediaClockRef(clock) {
         mAudioDevice = new AudioDevice();
         mThread = new std::thread(&AudioRender::run, this);
 
+        mAudioOutput = new AudioOutput(mAudioDevice, &mFrameQueue, mMediaClockRef);
     }
 
     void AudioRender::run() {
@@ -347,8 +426,8 @@ namespace next {
             AVPacket *pkt = mQueue->getPkt();
 
             if (pkt == nullptr) {
-                render();
-//                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+//                render();
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
 
@@ -358,7 +437,7 @@ namespace next {
             av_packet_unref(pkt);
             av_packet_free(&pkt);
 
-            render();
+//            render();
         }
     }
 
