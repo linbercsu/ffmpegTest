@@ -50,10 +50,11 @@ namespace next {
         mPts.store(pts);
     }
 
-    void MediaClock::resetStartPts(int64_t pts, int64_t startTime) {
+    void MediaClock::resetStartPts(int64_t pts) {
+        auto now = nowMicro();
         mStartPts.store(pts);
         mPts.store(pts);
-        mStartTime.store(startTime);
+        mStartTime.store(now);
     }
 
     void MediaClock::elapse(int64_t e) {

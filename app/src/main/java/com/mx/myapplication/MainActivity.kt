@@ -7,6 +7,7 @@ import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
 import com.mxtech.NativeCrashCollector
@@ -39,6 +40,14 @@ class MainActivity : AppCompatActivity() {
         player.play()
 
         glSurfaceView.setRenderer(player)
+
+        findViewById<View>(R.id.start).setOnClickListener {
+            player.start()
+        }
+
+        findViewById<View>(R.id.pause).setOnClickListener {
+            player.pause()
+        }
         // Example of a call to a native method
 //        val textView = findViewById<TextView>(R.id.sample_text)
         /*

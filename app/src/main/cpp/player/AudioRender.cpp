@@ -332,7 +332,8 @@ namespace next {
     
     class AudioOutput {
     public:
-        AudioOutput(AudioDevice *pDevice, LockFrameQueue *pQueue, MediaClock* clock):mAudioDeviceRef(pDevice),
+        AudioOutput(AudioRender* render, AudioDevice *pDevice, LockFrameQueue *pQueue, MediaClock* clock):mAudioRenderRef(render),
+        mAudioDeviceRef(pDevice),
                                                                   mFrameQueueRef(pQueue),
                                                                   mMediaClockRef(clock){
             mThread = new std::thread(&AudioOutput::run, this);
@@ -354,24 +355,40 @@ namespace next {
 
         void run() {
             AVFrame *frame = nullptr;
+            bool resetPts = true;
             while (!isStopped()) {
                 if (frame != nullptr) {
                     av_frame_free(&frame);
                     frame = nullptr;
                 }
 
+                if (mAudioRenderRef->isPaused()) {
+                    while (true) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                        if (!mAudioRenderRef->isPaused()) {
+                            break;
+                        }
+                    }
+
+                    resetPts = true;
+                }
+
                 frame = mFrameQueueRef->pop();
                 if (frame == nullptr) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 } else {
+                    if (resetPts) {
+                        mMediaClockRef->resetStartPts(frame->pts);
+                        resetPts = false;
+                    }
                     if (!isStopped()) {
 //                        auto now = nowMicro();
 
                         if (mFirstFrame) {
                             mFirstFrame = false;
 //                            startTime = now;
-                            mMediaClockRef->resetStartPts(0, nowMicro());
-                            next_log_tag("Audio", "output, first pts %ld, %d", frame->pts, __LINE__);
+//                            mMediaClockRef->resetStartPts(0, nowMicro());
+//                            next_log_tag("Audio", "output, first pts %ld, %d", frame->pts, __LINE__);
                         }
                         //may be write partical
                         auto written = 0;
@@ -418,6 +435,7 @@ namespace next {
         MediaClock* mMediaClockRef;
         AudioDevice* mAudioDeviceRef;
         LockFrameQueue* mFrameQueueRef;
+        AudioRender* mAudioRenderRef;
         int mSampleCount{0};
         int64_t startPts{0};
         int64_t currentPts{0};
@@ -429,7 +447,7 @@ namespace next {
         mAudioDevice = new AudioDevice();
         mThread = new std::thread(&AudioRender::run, this);
 
-        mAudioOutput = new AudioOutput(mAudioDevice, &mFrameQueue, mMediaClockRef);
+        mAudioOutput = new AudioOutput(this, mAudioDevice, &mFrameQueue, mMediaClockRef);
     }
 
     void AudioRender::run() {
@@ -645,5 +663,17 @@ namespace next {
 
     bool AudioRender::isStopped() {
         return mStopped.load();
+    }
+
+    void AudioRender::pause() {
+        mPaused.store(true);
+    }
+
+    void AudioRender::start() {
+        mPaused.store(false);
+    }
+
+    bool AudioRender::isPaused() {
+        return mPaused.load();
     }
 }

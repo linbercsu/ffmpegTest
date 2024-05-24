@@ -30,6 +30,9 @@ namespace next {
 
         void runInternal();
         void stop();
+        void pause();
+        void start();
+        bool isPaused();
     private:
         bool isStopped();
         void render();
@@ -43,6 +46,7 @@ namespace next {
         LockFrameQueue mFrameQueue;
         AudioOutput* mAudioOutput{nullptr};
         std::atomic_bool mStopped{false};
+        std::atomic_bool mPaused{false};
         DataContext* mDataContext{nullptr};
         struct AVFrame* reusedAudioFrame{nullptr};
     };

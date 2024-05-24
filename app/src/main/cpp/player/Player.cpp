@@ -8,11 +8,6 @@
 
 namespace next {
 
-
-    void Player::start() {
-        mReader.start();
-    }
-
     Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue) {
         mVideoRender = new VideoRender(&mVideoPackageQueue, &mMediaClock);
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
@@ -23,8 +18,12 @@ namespace next {
         delete mVideoRender;
     }
 
+    void Player::start() {
+        mAudioRender->start();
+    }
+
     void Player::pause() {
-        mReader.pause();
+        mAudioRender->pause();
     }
 
     void Player::stop() {

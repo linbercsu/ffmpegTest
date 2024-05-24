@@ -13,7 +13,7 @@ namespace next {
     public:
         MediaClock();
 
-        void resetStartPts(int64_t pts, int64_t startTime);
+        void resetStartPts(int64_t pts);
         void calculatePtsWithTime(int64_t now);
         void calculatePts();
         void elapse(int64_t e);

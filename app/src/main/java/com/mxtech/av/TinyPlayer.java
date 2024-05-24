@@ -25,11 +25,11 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     }
 
     public void start() {
-
+        start(ref);
     }
 
     public void pause() {
-
+        pause(ref);
     }
 
     public void seek() {
