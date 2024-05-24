@@ -10,6 +10,11 @@ extern "C" {
 }
 
 namespace next {
+
+    int audioFrameSize(AVFrame* frame) {
+        return frame->nb_samples;
+    }
+
     FrameQueue::FrameQueue(int size):mSize(size) {
 
     }
@@ -21,8 +26,15 @@ namespace next {
     void FrameQueue::pushFrame(struct AVFrame *frame) {
         mFrameList.emplace_back(frame);
 
-        auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
-        mCurrentSize += size;
+        if (frame->format != AV_PIX_FMT_NONE) {
+            auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
+            mCurrentSize += size;
+        } else {
+            auto size = audioFrameSize(frame);
+            mCurrentSize += size;
+        }
+
+
     }
 
     struct AVFrame *FrameQueue::pop() {
@@ -32,8 +44,13 @@ namespace next {
 
         auto frame = mFrameList.front();
         mFrameList.pop_front();
-        auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
-        mCurrentSize -= size;
+        if (frame->format != AV_PIX_FMT_NONE) {
+            auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
+            mCurrentSize -= size;
+        } else {
+            auto size = audioFrameSize(frame);
+            mCurrentSize -= size;
+        }
 
         return frame;
     }

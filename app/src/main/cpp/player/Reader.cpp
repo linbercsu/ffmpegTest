@@ -34,7 +34,7 @@ namespace next {
     };
 
 
-    Reader::Reader(std::string path, VideoPackageQueue* videoPackageQueue):mPath(path), mVideoPktQueueRef(videoPackageQueue) {
+    Reader::Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue):mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue) {
         mContextData = new ContextData();
         mThread = new std::thread(&Reader::run, this);
     }
@@ -57,7 +57,7 @@ namespace next {
 
         auto audio_stream_index = ret;
         auto audio_stream = fmt_ctx->streams[audio_stream_index];
-
+        mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base);
 
 
         ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
@@ -80,15 +80,22 @@ namespace next {
 
             pktCount++;
             if (pkt->stream_index == audio_stream_index) {
-                av_packet_unref(pkt);
-                av_packet_free(&pkt);
+                while (true) {
+                    if (mAudioPktQueueRef->enqueue(pkt)) {
+                        break;
+                    }
+
+                    next_log("enqueue full %d, %d", pktCount, __LINE__);
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
             } else if (pkt->stream_index == video_stream_index) {
                 while (true) {
                     if (mVideoPktQueueRef->enqueue(pkt)) {
                         break;
                     }
 
-                    next_log("enqueue full %d, %d", pktCount, __LINE__);
+//                    next_log("enqueue full %d, %d", pktCount, __LINE__);
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }

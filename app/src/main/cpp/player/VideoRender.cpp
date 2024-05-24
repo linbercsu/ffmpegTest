@@ -91,25 +91,12 @@ namespace next {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
-            codecParameters->format = AV_PIX_FMT_RGBA;
             timeBase = mQueue->getTimebase();
 
             break;
         }
 
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
-
-        next_log_tag("format", "format: %p", decoder->pix_fmts);
-        if (decoder->pix_fmts != nullptr) {
-            for (int i = 0; i < 1000; i++) {
-                AVPixelFormat format = decoder->pix_fmts[i];
-                if (AV_PIX_FMT_NONE == format) {
-                    break;
-                }
-
-                next_log_tag("format", "format: %d", format);
-            }
-        }
 
         auto dec_ctx = avcodec_alloc_context3(decoder);
 

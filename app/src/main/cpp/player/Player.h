@@ -10,6 +10,7 @@
 namespace next {
 
     class VideoRender;
+    class AudioRender;
 
 
     class Player {
@@ -30,7 +31,9 @@ namespace next {
     private:
         std::string mPath;
         VideoRender* mVideoRender;
+        AudioRender* mAudioRender;
         VideoPackageQueue mVideoPackageQueue;
+        VideoPackageQueue mAudioPackageQueue;
         Reader mReader;
     };
 

@@ -14,7 +14,7 @@ namespace next {
 
     class Reader {
     public:
-        Reader(std::string path, VideoPackageQueue* videoPackageQueue);
+        Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue);
 
         void run();
 
@@ -27,6 +27,7 @@ namespace next {
         void open();
     private:
         VideoPackageQueue* mVideoPktQueueRef{nullptr};
+        VideoPackageQueue* mAudioPktQueueRef{nullptr};
         bool stopped{false};
         bool paused{true};
         std::thread* mThread{nullptr};

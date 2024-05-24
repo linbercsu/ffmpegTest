@@ -75,6 +75,7 @@ add_library( # Sets the name of the library.
         player/JNIPlayer.cpp
         player/VideoPackageQueue.cpp
         player/VideoRender.cpp
+        player/AudioRender.cpp
         player/FrameQueue.cpp
         player/Clock.cpp
         player/Exception.cpp
@@ -113,6 +114,7 @@ find_library( # Sets the name of the path variable.
 
 find_library( z-lib z)
 find_library( gl-lib GLESV2)
+find_library( audio-lib aaudio)
 
 string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
 if(build_type MATCHES "^rel")
@@ -132,5 +134,6 @@ target_link_libraries( # Specifies the target library.
                        ${log-lib}
                        ${z-lib}
                        ${gl-lib}
+                       ${audio-lib}
         yuv
         )

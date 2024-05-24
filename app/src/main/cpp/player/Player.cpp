@@ -4,6 +4,7 @@
 
 #include "Player.h"
 #include "VideoRender.h"
+#include "AudioRender.h"
 
 namespace next {
 
@@ -12,8 +13,9 @@ namespace next {
         mReader.start();
     }
 
-    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mReader(path, &mVideoPackageQueue) {
+    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue) {
         mVideoRender = new VideoRender(&mVideoPackageQueue);
+        mAudioRender = new AudioRender(&mAudioPackageQueue);
     }
 
     void Player::pause() {
