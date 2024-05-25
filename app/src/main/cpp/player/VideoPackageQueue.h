@@ -22,11 +22,13 @@ namespace next {
         struct AVCodecParameters* getCodecParameters();
         AVRational getTimebase();
         bool enqueue(struct AVPacket* pkt);
+        void setNeedClear();
         struct AVPacket* getPkt();
 
         void end();
         bool isEnd();
         void clear();
+        bool getClearFlagAndClear();
     private:
         bool mEnd{false};
         bool mCodecParametersGot{false};
@@ -35,6 +37,7 @@ namespace next {
         std::list<struct AVPacket*> mPktList;
         std::mutex mLock;
         int mSize{0};
+        bool needClear{false};
     };
 }
 

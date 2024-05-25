@@ -29,6 +29,7 @@ namespace next {
         }
 
         mFrameList.clear();
+        mCurrentSize = 0;
     }
 
     bool LockFrameQueue::isFull() {

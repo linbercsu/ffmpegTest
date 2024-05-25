@@ -66,18 +66,7 @@ namespace next {
     }
 
 
-    class DataContext {
-    public:
-        ~DataContext() {
-            if (decoderContext != nullptr) {
-                avcodec_free_context(&decoderContext);
-                decoderContext = nullptr;
-            }
-        }
 
-        AVCodecContext* decoderContext{nullptr};
-        AVCodec* decoder{nullptr};
-    };
 
     class AudioFrameBuffer {
 
@@ -86,6 +75,7 @@ namespace next {
         AVFrame* bufferTmp = {nullptr};
         int SIZE = 1024 * 4;
         int count = 0;
+        int64_t firstPts{0};
 
         ~AudioFrameBuffer() {
             if (buffer != nullptr) {
@@ -159,6 +149,24 @@ namespace next {
 //            memcpy(buffer->data[1], bufferTmp->data[1], remain * 4);
             return 0;
         }
+
+        void clear() {
+            count = 0;
+        }
+    };
+
+    class DataContext {
+    public:
+        ~DataContext() {
+            if (decoderContext != nullptr) {
+                avcodec_free_context(&decoderContext);
+                decoderContext = nullptr;
+            }
+        }
+
+        AVCodecContext* decoderContext{nullptr};
+        AVCodec* decoder{nullptr};
+        AudioFrameBuffer frameBuffer;
     };
 
     class AudioDevice {
@@ -257,7 +265,7 @@ namespace next {
                                           sampleRate, size);
         }
 
-        void convert(AVFrame *oldFrame, LockFrameQueue& queue) {
+        void convert(AVFrame *oldFrame, LockFrameQueue& queue, AudioFrameBuffer& audioFrameBuffer) {
             int ret;
             int dst_nb_samples;
 
@@ -297,7 +305,7 @@ namespace next {
                                            (AVRational) {1, sampleRate},
                                            AV_TIME_BASE_Q);
 
-                newFrame->pts = pts;
+                newFrame->pts = pts + startPts;
                 samples_count += newFrame->nb_samples;
 
                 queue.pushFrame(newFrame);
@@ -311,10 +319,14 @@ namespace next {
 //                next_log_tag("Audio", "write: error %d %d, %d", frame->nb_samples, ret, __LINE__);
         }
 
+        void setStartPts(int64_t pts) {
+            startPts = pts;
+            samples_count = 0;
+        }
+
         friend class AudioOutput;
 
         AAudioStream *stream;
-        AudioFrameBuffer audioFrameBuffer;
         int32_t sampleRate;
         int32_t channelCount;
         int32_t format;
@@ -328,6 +340,7 @@ namespace next {
         int mSourceChannelLayout;
         int64_t samples_count{0};
         int32_t samplesPerFrame;
+        int64_t startPts{0};
     };
     
     class AudioOutput {
@@ -356,6 +369,7 @@ namespace next {
         void run() {
             AVFrame *frame = nullptr;
             bool resetPts = true;
+            int64_t lastFramePts = 0;
             while (!isStopped()) {
                 if (frame != nullptr) {
                     av_frame_free(&frame);
@@ -377,7 +391,14 @@ namespace next {
                 if (frame == nullptr) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 } else {
+                    //seek backward
+                    if (lastFramePts > frame->pts) {
+                        resetPts = true;
+                    }
+
+                    lastFramePts = frame->pts;
                     if (resetPts) {
+                        next_log_tag("audio", "reset pts %ld, %d", frame->pts, __LINE__);
                         mMediaClockRef->resetStartPts(frame->pts);
                         resetPts = false;
                     }
@@ -501,14 +522,36 @@ namespace next {
         ret = avcodec_open2(dec_ctx, decoder, &opts);
 
         reusedAudioFrame = av_frame_alloc();
+        bool resetFirstPts = true;
         while (!isStopped()) {
+            if (mQueueRef->getClearFlagAndClear()) {
+                mFrameQueue.clear();
+
+                avcodec_flush_buffers(dec_ctx);
+                mDataContext->frameBuffer.clear();
+                resetFirstPts = true;
+            }
+
             AVPacket *pkt = mQueueRef->getPkt();
 
             if (pkt == nullptr) {
+//                next_log_tag("audio", "waiting pkt %d", __LINE__);
 //                render();
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
+
+            if (resetFirstPts) {
+                resetFirstPts = false;
+
+                int64_t pts = av_rescale_q(pkt->pts,
+                                           timeBase,
+                                           AV_TIME_BASE_Q);
+
+                mAudioDevice->setStartPts(pts);
+            }
+
+//            next_log_tag("audio", "got pkt %d", __LINE__);
 
             decode(dec_ctx, pkt, reusedAudioFrame);
 
@@ -592,7 +635,7 @@ namespace next {
 //                         AV_TIME_BASE_Q);
 //
 
-        mAudioDevice->convert(frame, mFrameQueue);
+        mAudioDevice->convert(frame, mFrameQueue, mDataContext->frameBuffer);
 //        newFrame->pts = p;
     }
 

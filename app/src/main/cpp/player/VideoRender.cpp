@@ -143,11 +143,17 @@ namespace next {
 
         reusedVideoFrame = av_frame_alloc();
         while (!isStopped()) {
+            if (mQueueRef->getClearFlagAndClear()) {
+                mFrameQueue.clear();
+                avcodec_flush_buffers(dec_ctx);
+            }
+
             AVPacket *pkt = mQueueRef->getPkt();
 
             if (pkt == nullptr) {
                 render();
-//                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+//                next_log("no video pkt detected. %d", __LINE__);
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
                 continue;
             }
 
@@ -200,6 +206,7 @@ namespace next {
 
     void VideoRender::render() {
         if (mFrameQueue.isEmpty()) {
+            next_log_tag("render", "no video frame %d", __LINE__);
             if (mQueueRef->isEnd()) {
                 if (!lastRender) {
                     lastRender = true;
@@ -218,18 +225,40 @@ namespace next {
             return;
         }
 
+        int64_t lastPts = 0;
+        bool lastPtsSet = false;
         while (!isStopped()) {
             auto next = mFrameQueue.first();
-            auto duration = next->pts - mCurrentFrame->pts;
+//            auto duration = next->pts - mCurrentFrame->pts;
             int64_t pts = mClock->getPts();
+            if (!lastPtsSet) {
+                lastPtsSet = true;
+                lastPts = pts;
+            }
+
+            //backward
+            if (lastPts > pts) {
+                next_log("seek backward detected. %d", __LINE__);
+                break;
+            }
+
+//            //seek backward
+//            if (mCurrentFrame->pts >= next->pts) {
+//                next_log("seek backward detected. %d", __LINE__);
+//                releaseAndSetCurrentFrame();
+//                break;
+//            }
+
             if (pts >= next->pts) {
                 //next frame
                 releaseAndSetCurrentFrame();
             } else {
                 if (mFrameQueue.isFull()) {
+//                    next_log_tag("video", "frame queue full, and dispaly current frame %ld, %d", mCurrentFrame->pts, __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds (10));
                     continue;
                 }
+//                next_log_tag("video", "render exit %d", __LINE__);
                 break;
             }
 
@@ -252,6 +281,7 @@ namespace next {
 
 
         while (ret == AVERROR(EAGAIN)) {
+            next_log_tag("video", "again error detected, %d", __LINE__);
             while (!isStopped()) {
                 ret = avcodec_receive_frame(dec, videoFrame);
                 if (ret < 0) {
@@ -266,6 +296,9 @@ namespace next {
                         if (ret < 0 && ret != AVERROR(EAGAIN)) {
                             throw DecoderException(ret);
                         }
+
+                        next_log_tag("video", "send pkt failed, %d", __LINE__);
+
                         continue;
                     }
 

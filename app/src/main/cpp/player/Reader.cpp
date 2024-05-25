@@ -41,7 +41,7 @@ namespace next {
     };
 
 
-    Reader::Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue):mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue) {
+    Reader::Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback):mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue), mReaderCallback(callback) {
         mContextData = new ContextData();
         mThread = new std::thread(&Reader::run, this);
     }
@@ -89,21 +89,58 @@ namespace next {
 
         mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar, video_stream->time_base);
 
+        auto audioDuration = av_rescale_q(audio_stream->duration,
+                                     audio_stream->time_base,
+                                     AV_TIME_BASE_Q);
+
+        mReaderCallback->onDurationKnown(audioDuration);
         AVPacket * pkt = nullptr;
         auto pktCount = 0;
         while (!isStopped()) {
-            if (pkt != nullptr) {
-                av_packet_free(&pkt);
-                pkt = nullptr;
+//            if (pkt != nullptr) {
+//                av_packet_free(&pkt);
+//                pkt = nullptr;
+//            }
+
+            int64_t seek = getSeekPosition();
+            if (seek != -1) {
+                int64_t start = av_rescale_q(seek,
+                                                  AV_TIME_BASE_Q,
+                                                  audio_stream->time_base);
+                ret = av_seek_frame(fmt_ctx, audio_stream_index, start, AVSEEK_FLAG_BACKWARD);
+                if (ret != 0) {
+                    throw std::bad_cast();
+                }
+                start = av_rescale_q(seek,
+                                                  AV_TIME_BASE_Q,
+                                                  video_stream->time_base);
+                ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
+                if (ret != 0) {
+                    throw std::bad_cast();
+                }
+                mVideoPktQueueRef->setNeedClear();
+                mAudioPktQueueRef->setNeedClear();
+
+                next_log("process seek %ld, %d", seek, __LINE__);
             }
 
-            pkt = av_packet_alloc();
+            if (pkt == nullptr) {
+                pkt = av_packet_alloc();
+            } else {
+                av_packet_unref(pkt);
+            }
+
             ret = av_read_frame(fmt_ctx, pkt);
             if (ret < 0) {
-                av_packet_free(&pkt);
-                pkt = nullptr;
-                next_log("av_read_frame ret %d, %s, %d, %d", ret, av_err2str(ret), pktCount, __LINE__);
-                break;
+//                av_packet_free(&pkt);
+//                pkt = nullptr;
+                if (ret == AVERROR_EOF) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    continue;
+                } else {
+                    next_log("av_read_frame ret %d, %s, %d, %d", ret, av_err2str(ret), pktCount, __LINE__);
+                    break;
+                }
             }
 
             pktCount++;
@@ -141,6 +178,7 @@ namespace next {
 
         while (!isStopped()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            //todo
         }
     }
 
@@ -163,5 +201,21 @@ namespace next {
 
     bool Reader::isStopped() {
         return stopped.load();
+    }
+
+    void Reader::seekBackward(int64_t newPosition) {
+        next_log("seekBackward %ld, %d", newPosition, __LINE__);
+        auto seek = newPosition | 0x8000000000000000L;
+        mSeekPosition.store(seek);
+    }
+
+    int64_t Reader::getSeekPosition() {
+        int64_t seek = mSeekPosition.load();
+        if ((seek & 0x8000000000000000L) == 0) {
+            return -1;
+        } else {
+            mSeekPosition.store(0);
+            return seek & 0x7fffffffffffffff;    
+        }
     }
 }

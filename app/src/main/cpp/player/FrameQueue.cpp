@@ -29,6 +29,7 @@ namespace next {
             av_frame_free(&ptr);
         }
         mFrameList.clear();
+        mCurrentSize = 0;
     }
 
     bool FrameQueue::isFull() {

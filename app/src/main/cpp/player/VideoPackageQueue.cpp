@@ -47,6 +47,9 @@ namespace next {
         }
 
         auto pkt = mPktList.front();
+
+        assert(pkt != nullptr);
+
         mSize -= pkt->size;
         mPktList.pop_front();
 
@@ -57,8 +60,10 @@ namespace next {
         std::lock_guard<std::mutex> l(mLock);
         for (auto pkt : mPktList) {
             auto ptr = pkt;
-            av_packet_unref(ptr);
-            av_packet_free(&ptr);
+            if (ptr != nullptr) {
+                av_packet_unref(ptr);
+                av_packet_free(&ptr);
+            }
         }
         mPktList.clear();
     }
@@ -78,5 +83,34 @@ namespace next {
         return mTimeBase;
     }
 
+    bool VideoPackageQueue::getClearFlagAndClear() {
+        std::lock_guard<std::mutex> l(mLock);
+        auto clear = needClear;
+        needClear = false;
 
+        if (clear) {
+//            bool erase = false;
+            for (auto ite = mPktList.begin(); ite != mPktList.end();) {
+                auto ptr = ite.operator*();
+                if (ptr == nullptr) {
+//                    erase = true;
+                    ite = mPktList.erase(ite);
+                    break;
+                } else {
+                    mSize -= ptr->size;
+                    av_packet_unref(ptr);
+                    av_packet_free(&ptr);
+                    ite = mPktList.erase(ite);
+                }
+            }
+        }
+
+        return clear;
+    }
+
+    void VideoPackageQueue::setNeedClear() {
+        std::lock_guard<std::mutex> l(mLock);
+        needClear = true;
+        mPktList.emplace_back(nullptr);
+    }
 }

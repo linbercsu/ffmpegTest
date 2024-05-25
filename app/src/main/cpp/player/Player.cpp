@@ -5,10 +5,11 @@
 #include "Player.h"
 #include "VideoRender.h"
 #include "AudioRender.h"
+#include "Log.h"
 
 namespace next {
 
-    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue) {
+    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue, this) {
         mVideoRender = new VideoRender(&mVideoPackageQueue, &mMediaClock);
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
     }
@@ -32,7 +33,7 @@ namespace next {
         mVideoRender->stop();
     }
 
-    void Player::seek() {
+    void Player::seek(int64_t position) {
         mReader.seek();
     }
 
@@ -48,5 +49,23 @@ namespace next {
 
     void Player::onSurfaceChanged(int w, int h) {
         mVideoRender->onSurfaceChanged(w, h);
+    }
+
+    void Player::onDurationKnown(int64_t duration) {
+        mDuration.store(duration);
+    }
+
+    int64_t Player::currentPosition() {
+        return mMediaClock.getPts();
+    }
+
+    void Player::backward(int64_t duration) {
+        int64_t c = currentPosition();
+        next_log_tag("player", "backward, current: %ld, %d", c, __LINE__);
+        auto newPosition = c - duration;
+        if (newPosition < 0) {
+            newPosition = 0;
+        }
+        mReader.seekBackward(newPosition);
     }
 }

@@ -7,6 +7,7 @@
 #include "Reader.h"
 #include "VideoPackageQueue.h"
 #include "MediaClock.h"
+#include <atomic>
 
 namespace next {
 
@@ -14,7 +15,7 @@ namespace next {
     class AudioRender;
 
 
-    class Player {
+    class Player : ReaderCallback {
 
     public:
         Player(std::string path);
@@ -22,7 +23,8 @@ namespace next {
         void start();
         void pause();
         void stop();
-        void seek();
+        void seek(int64_t position);
+        void backward(int64_t duration);
 
         void onSurfaceCreated();
 
@@ -30,6 +32,9 @@ namespace next {
 
         void onSurfaceChanged(int i, int i1);
 
+        void onDurationKnown(int64_t duration) override;
+
+        int64_t currentPosition();
     private:
         std::string mPath;
         VideoRender* mVideoRender;
@@ -38,6 +43,8 @@ namespace next {
         VideoPackageQueue mAudioPackageQueue;
         Reader mReader;
         MediaClock mMediaClock;
+
+        std::atomic_int64_t mDuration{0};
     };
 
 
