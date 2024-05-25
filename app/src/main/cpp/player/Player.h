@@ -25,6 +25,7 @@ namespace next {
         void stop();
         void seek(int64_t position);
         void backward(int64_t duration);
+        void forward(int64_t duration);
 
         void onSurfaceCreated();
 

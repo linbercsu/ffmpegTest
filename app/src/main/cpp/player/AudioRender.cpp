@@ -305,7 +305,12 @@ namespace next {
                                            (AVRational) {1, sampleRate},
                                            AV_TIME_BASE_Q);
 
+                int64_t duration = av_rescale_q(newFrame->nb_samples,
+                                           (AVRational) {1, sampleRate},
+                                           AV_TIME_BASE_Q);
+
                 newFrame->pts = pts + startPts;
+                newFrame->pkt_duration = duration;
                 samples_count += newFrame->nb_samples;
 
                 queue.pushFrame(newFrame);
@@ -370,6 +375,7 @@ namespace next {
             AVFrame *frame = nullptr;
             bool resetPts = true;
             int64_t lastFramePts = 0;
+            int64_t lastFrameDuration = 0;
             while (!isStopped()) {
                 if (frame != nullptr) {
                     av_frame_free(&frame);
@@ -379,12 +385,16 @@ namespace next {
                 if (mAudioRenderRef->isPaused()) {
                     while (true) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                        if (!mAudioRenderRef->isPaused()) {
+                        if (!mAudioRenderRef->isPaused() || mAudioRenderRef->isStopped()) {
                             break;
                         }
                     }
 
                     resetPts = true;
+
+                    if (isStopped()) {
+                        break;
+                    }
                 }
 
                 frame = mFrameQueueRef->pop();
@@ -394,9 +404,13 @@ namespace next {
                     //seek backward
                     if (lastFramePts > frame->pts) {
                         resetPts = true;
+                    } else if (std::abs(lastFramePts + lastFrameDuration - frame->pts) > 10000) {//10 millsecond
+                        //seek forward
+                        resetPts = true;
                     }
 
                     lastFramePts = frame->pts;
+                    lastFrameDuration = frame->pkt_duration;
                     if (resetPts) {
                         next_log_tag("audio", "reset pts %ld, %d", frame->pts, __LINE__);
                         mMediaClockRef->resetStartPts(frame->pts);

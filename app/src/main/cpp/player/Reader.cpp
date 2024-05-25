@@ -209,6 +209,12 @@ namespace next {
         mSeekPosition.store(seek);
     }
 
+    void Reader::seekForward(int64_t newPosition) {
+        next_log("seekForward %ld, %d", newPosition, __LINE__);
+        auto seek = newPosition | 0x8000000000000000L;
+        mSeekPosition.store(seek);
+    }
+
     int64_t Reader::getSeekPosition() {
         int64_t seek = mSeekPosition.load();
         if ((seek & 0x8000000000000000L) == 0) {

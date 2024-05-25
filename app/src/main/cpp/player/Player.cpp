@@ -68,4 +68,15 @@ namespace next {
         }
         mReader.seekBackward(newPosition);
     }
+
+    void Player::forward(int64_t duration) {
+        auto allDuration = mDuration.load();
+        int64_t c = currentPosition();
+        auto newPosition = c + duration;
+        if (newPosition > allDuration) {
+            newPosition = allDuration;
+        }
+
+        mReader.seekForward(newPosition);
+    }
 }

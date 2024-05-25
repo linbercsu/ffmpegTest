@@ -53,6 +53,13 @@ void stop(JNIEnv *env,
     player->stop();
 
 }
+void forward(JNIEnv *env,
+                      jobject  /*thzz*/, jlong ptr, jlong duration) {
+    auto *player = reinterpret_cast<next::Player *>(ptr);
+
+    player->forward(duration);
+
+}
 void backward(JNIEnv *env,
                       jobject  /*thzz*/, jlong ptr, jlong duration) {
     auto *player = reinterpret_cast<next::Player *>(ptr);
@@ -75,6 +82,7 @@ const JNINativeMethod methods[] =
                 {"nativeOnSurfaceChanged", "(JII)V",                                     (void *) nativeOnSurfaceChanged},
                 {"nativeOnDrawFrame", "(J)V",                                     (void *) nativeOnDrawFrame},
                 {"nativeStop", "(J)V",                                     (void *) stop},
+                {"nativeForward", "(JJ)V",                                     (void *) forward},
                 {"nativeBackward", "(JJ)V",                                     (void *) backward},
                 {"start", "(J)V",                                     (void *) start},
                 {"pause",    "(J)V",                                                      (void *) pause}

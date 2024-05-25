@@ -33,8 +33,8 @@ namespace next {
         void pause();
         void start();
         bool isPaused();
-    private:
         bool isStopped();
+    private:
         void render();
         void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame);
         void onFrame(struct AVFrame *frame, AVRational timebase);

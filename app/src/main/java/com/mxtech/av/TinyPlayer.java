@@ -37,7 +37,7 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     }
 
     public void forward(long duration) {
-
+        nativeForward(ref, duration);
     }
 
     public void backward(long duration) {
@@ -68,6 +68,7 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     private native void pause(long ref);
     private native void nativeStop(long ref);
     private native void nativeBackward(long ref, long duration);
+    private native void nativeForward(long ref, long duration);
 
     private native void nativeOnSurfaceCreated(long ref);
     private native void nativeOnSurfaceChanged(long ref, int w, int h);

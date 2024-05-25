@@ -31,6 +31,7 @@ namespace next {
         void stop();
         void seek();
         void seekBackward(int64_t newPosition);
+        void seekForward(int64_t newPosition);
         int64_t getSeekPosition();
     private:
         void open();
