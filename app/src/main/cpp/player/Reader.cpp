@@ -3,6 +3,7 @@
 //
 
 #include "Reader.h"
+#include "Releasable.h"
 #include <thread>
 #include <chrono>
 #include <android/log.h>
@@ -24,25 +25,11 @@ namespace next {
         }
 
         AVFormatContext *fmt_ctx = nullptr;
-//        AVCodecContext *audio_dec_ctx = nullptr;
-//        AVCodecContext *video_dec_ctx = nullptr;
-//        int64_t audioDurationAdded = 0;
-//        int64_t videoDurationAdded = 0;
-//        int width = 0, height = 0;
-//        enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
-//        AVStream *audio_stream = nullptr;
-//        AVStream *video_stream = nullptr;
-//        const char *src_filename = nullptr;
-//        int audio_stream_idx = -1;
-//        int video_stream_idx = -1;
-//        AVFrame *mAudioFrame = nullptr;
-//        AVFrame *videoFrame = nullptr;
-//        AVPacket *pkt = nullptr;
+
     };
 
 
     Reader::Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback):mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue), mReaderCallback(callback) {
-        mContextData = new ContextData();
         mThread = new std::thread(&Reader::run, this);
     }
 
@@ -52,9 +39,7 @@ namespace next {
 
     }
 
-    void Reader::run() {
-        open();
-
+    void Reader::release() {
         if (mContextData != nullptr) {
             delete mContextData;
             mContextData = nullptr;
@@ -64,7 +49,13 @@ namespace next {
         mAudioPktQueueRef->clear();
     }
 
+    void Reader::run() {
+        Releasable<Reader> r(this);
+        open();
+    }
+
     void Reader::open() {
+        mContextData = new ContextData();
         int ret = 0;
         ret = avformat_open_input(&(mContextData->fmt_ctx), mPath.c_str(), nullptr, nullptr);
         next_log("avformat_open_input ret %d, %d", ret, __LINE__);
@@ -97,11 +88,6 @@ namespace next {
         AVPacket * pkt = nullptr;
         auto pktCount = 0;
         while (!isStopped()) {
-//            if (pkt != nullptr) {
-//                av_packet_free(&pkt);
-//                pkt = nullptr;
-//            }
-
             int64_t seek = getSeekPosition();
             if (seek != -1) {
                 int64_t start = av_rescale_q(seek,
@@ -111,13 +97,7 @@ namespace next {
                 if (ret != 0) {
                     throw std::bad_cast();
                 }
-//                start = av_rescale_q(seek,
-//                                                  AV_TIME_BASE_Q,
-//                                                  video_stream->time_base);
-//                ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
-//                if (ret != 0) {
-//                    throw std::bad_cast();
-//                }
+
                 mVideoPktQueueRef->setNeedClear();
                 mAudioPktQueueRef->setNeedClear();
 
@@ -132,8 +112,6 @@ namespace next {
 
             ret = av_read_frame(fmt_ctx, pkt);
             if (ret < 0) {
-//                av_packet_free(&pkt);
-//                pkt = nullptr;
                 if (ret == AVERROR_EOF) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
                     continue;
@@ -173,12 +151,6 @@ namespace next {
             av_packet_free(&pkt);
             pkt = nullptr;
         }
-
-//        mVideoPktQueueRef->end();
-
-//        while (!isStopped()) {
-//            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-//        }
     }
 
     void Reader::stop() {

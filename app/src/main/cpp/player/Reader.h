@@ -24,6 +24,7 @@ namespace next {
         Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback);
         ~Reader();
 
+        void release();
         void run();
 
         void start();

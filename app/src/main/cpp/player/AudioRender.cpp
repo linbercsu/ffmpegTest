@@ -7,6 +7,7 @@
 #include "Exception.h"
 #include <aaudio/AAudio.h>
 #include "Log.h"
+#include "Releasable.h"
 #include <chrono>
 
 using namespace std::chrono;
@@ -20,6 +21,23 @@ extern "C" {
 }
 
 namespace next {
+    class FrameAutoRelease {
+    public:
+        FrameAutoRelease(AVFrame * frame): mRef(frame) {
+
+        }
+
+        ~FrameAutoRelease() {
+            if (mRef != nullptr) {
+                av_frame_free(&mRef);
+                mRef = nullptr;
+            }
+        }
+
+    private:
+        AVFrame * mRef;
+    };
+
     namespace {
         int64_t nowMicro() {
             microseconds ms = duration_cast< microseconds >(
@@ -376,17 +394,17 @@ namespace next {
         }
 
         void run() {
-            AVFrame *frame = nullptr;
+//            AVFrame *frame = nullptr;
             bool resetPts = true;
             int64_t lastFramePts = 0;
             int64_t lastFrameDuration = 0;
             int32_t seekMark = mSeekMark.load();
             while (!isStopped()) {
 //                next_log_tag("audio", "output %d", __LINE__);
-                if (frame != nullptr) {
-                    av_frame_free(&frame);
-                    frame = nullptr;
-                }
+//                if (frame != nullptr) {
+//                    av_frame_free(&frame);
+//                    frame = nullptr;
+//                }
 
                 if (mAudioRenderRef->isPaused()) {
                     next_log_tag("audio", "pause %d", __LINE__);
@@ -404,11 +422,12 @@ namespace next {
                     }
                 }
 
-                frame = mFrameQueueRef->pop();
+                auto frame = mFrameQueueRef->pop();
                 if (frame == nullptr) {
 //                    next_log_tag("audio", "output waiting frame%d", __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 } else {
+                    FrameAutoRelease r(frame);
                     int32_t newSeekMark = mSeekMark.load();
                     if (seekMark != newSeekMark) {
                         seekMark = newSeekMark;
@@ -502,23 +521,35 @@ namespace next {
         mAudioOutput = new AudioOutput(this, mAudioDevice, &mFrameQueue, mMediaClockRef);
     }
 
-    void AudioRender::run() {
-        mDataContext = new DataContext();
-        runInternal();
+    AudioRender::~AudioRender() {
+        next_log_tag("audio", "delete AudioRender %d", __LINE__);
+        delete mThread;
+        delete mAudioDevice;
+        delete mAudioOutput;
+    }
 
+    void AudioRender::release() {
         mAudioDevice->clear();
 
         mFrameQueue.clear();
 
-        delete mDataContext;
-        mDataContext = nullptr;
+        if (mDataContext != nullptr) {
+            delete mDataContext;
+            mDataContext = nullptr;
+        }
 
         if (reusedAudioFrame != nullptr) {
             av_frame_free(&reusedAudioFrame);
             reusedAudioFrame = nullptr;
         }
     }
+
+    void AudioRender::run() {
+        Releasable<AudioRender> r(this);
+        runInternal();
+    }
     void AudioRender::runInternal() {
+        mDataContext = new DataContext();
         int ret = 0;
         AVCodecParameters *codecParameters = nullptr;
         AVRational timeBase;
@@ -556,14 +587,6 @@ namespace next {
         bool resetFirstPts = true;
         while (!isStopped()) {
 //            next_log_tag("audio", "render %d", __LINE__);
-//            if (mQueueRef->getClearFlagAndClear()) {
-//                mFrameQueue.clear();
-//
-//                avcodec_flush_buffers(dec_ctx);
-//                mDataContext->frameBuffer.clear();
-//                resetFirstPts = true;
-//                mAudioOutput->onSeek();
-//            }
 
             bool clear = false;
             AVPacket *pkt = mQueueRef->getPkt(&clear);
@@ -598,7 +621,7 @@ namespace next {
             decode(dec_ctx, pkt, reusedAudioFrame);
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            av_packet_unref(pkt);
+//            av_packet_unref(pkt);
             av_packet_free(&pkt);
 
 //            render();
@@ -682,6 +705,7 @@ namespace next {
     }
 
     void AudioRender::render() {
+        /*
         if (mFrameQueue.isEmpty()) {
             if (mQueueRef->isEnd()) {
                 if (!lastRender) {
@@ -697,46 +721,6 @@ namespace next {
             AVFrame *pFrame = mFrameQueue.pop();
             mAudioDevice->write(pFrame);
         } while (mFrameQueue.isFull());
-
-        /*
-        if (mCurrentFrame == nullptr) {
-            setCurrentFrame();
-            //render first frame
-            mClock.display();
-            next_log_tag("render", "first frame %ld, %d", mCurrentFrame->pts, __LINE__);
-            return;
-        }
-
-        while (true) {
-            auto next = mFrameQueue.first();
-            auto duration = next->pts - mCurrentFrame->pts;
-
-            auto last = mClock.lastDisplayMicro();
-            auto now = mClock.nowMicro();
-
-            auto elapse = now - last;
-            //
-            if (elapse < duration) {
-                if (mFrameQueue.isFull()) {
-                    std::this_thread::sleep_for(std::chrono::microseconds(duration - elapse));
-                    continue;
-                } else {
-                    break;
-                }
-            }
-
-            releaseAndSetCurrentFrame();
-
-//            next_log_tag("render", "render frame %ld, %d", mCurrentFrame->pts, __LINE__);
-            mClock.display();
-            if (mFrameQueue.isFull()) {
-                duration = mFrameQueue.first()->pts - mCurrentFrame->pts;
-                std::this_thread::sleep_for(std::chrono::microseconds(duration));
-                continue;
-            } else {
-                break;
-            }
-        }
          */
     }
 

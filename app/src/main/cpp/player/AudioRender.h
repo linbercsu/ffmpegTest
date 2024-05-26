@@ -26,9 +26,11 @@ namespace next {
     class AudioRender {
     public:
         AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
+        ~AudioRender();
         void run();
 
         void runInternal();
+        void release();
         void stop();
         void pause();
         void start();

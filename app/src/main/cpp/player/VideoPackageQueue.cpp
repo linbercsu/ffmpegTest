@@ -68,7 +68,7 @@ namespace next {
                             break;
                         } else {
                             mSize -= ptr->size;
-                            av_packet_unref(ptr);
+//                            av_packet_unref(ptr);
                             av_packet_free(&ptr);
                             ite = mPktList.erase(ite);
                         }
@@ -98,7 +98,7 @@ namespace next {
         for (auto pkt : mPktList) {
             auto ptr = pkt;
             if (ptr != nullptr) {
-                av_packet_unref(ptr);
+//                av_packet_unref(ptr);
                 av_packet_free(&ptr);
             }
         }

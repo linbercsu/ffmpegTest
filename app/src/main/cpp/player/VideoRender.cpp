@@ -12,6 +12,7 @@
 #include <GLES2/gl2.h>
 #include "libyuv.h"
 #include "ZEffect.h"
+#include "Releasable.h"
 
 extern "C" {
 #include "libavformat/avformat.h"
@@ -81,6 +82,7 @@ namespace next {
     }
 
     VideoRender::~VideoRender() {
+        next_log_tag("video", "delete VideoRender %d", __LINE__);
         delete mThread;
         mThread = nullptr;
 
@@ -90,9 +92,7 @@ namespace next {
         }
     }
 
-    void VideoRender::run() {
-        mDataContext = new DataContext();
-        runInternal();
+    void VideoRender::release() {
         mFrameQueue.clear();
         if (mCurrentFrame != nullptr) {
             av_frame_free(&mCurrentFrame);
@@ -106,6 +106,15 @@ namespace next {
 
         delete mDataContext;
         mDataContext = nullptr;
+
+        glDeleteTextures(1, textures);
+    }
+
+    void VideoRender::run() {
+        Releasable<VideoRender> r(this);
+        mDataContext = new DataContext();
+        runInternal();
+
     }
 
     void VideoRender::runInternal() {
@@ -143,12 +152,6 @@ namespace next {
 
         reusedVideoFrame = av_frame_alloc();
         while (!isStopped()) {
-//            if (mQueueRef->getClearFlagAndClear()) {
-//                mFrameQueue.clear();
-//                avcodec_flush_buffers(dec_ctx);
-//            }
-
-
             bool clear = false;
             AVPacket *pkt = mQueueRef->getPkt(&clear);
             if (clear) {
@@ -168,7 +171,6 @@ namespace next {
             decode(dec_ctx, pkt, reusedVideoFrame);
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            av_packet_unref(pkt);
             av_packet_free(&pkt);
 
             render();
@@ -347,7 +349,7 @@ namespace next {
 
     //gl thread
     void VideoRender::onSurfaceCreated() {
-        auto *textures = new GLuint[1]; //生成纹理id
+//        auto *textures = new GLuint[1]; //生成纹理id
         glGenTextures(  //创建纹理对象
                 1, //产生纹理id的数量
                 textures

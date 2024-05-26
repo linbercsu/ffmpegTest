@@ -30,6 +30,8 @@ namespace next {
 
         void run();
 
+        void release();
+
         void onSurfaceCreated();
 
         void onDrawFrame();
@@ -54,6 +56,7 @@ namespace next {
         std::thread* mThread{nullptr};
         FrameQueue mFrameQueue;
         MediaClock* mClock;
+        GLuint textures[1];
         GLuint texture;
         nx_effect::BaseEffect* effect;
         int width;
