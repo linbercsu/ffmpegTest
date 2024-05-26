@@ -3,6 +3,14 @@
 //
 #include <jni.h>
 #include "Player.h"
+#include "Log.h"
+#include "MemorySupervisor.h"
+
+//#define NEXT_DETECT_MEMORY
+
+#ifdef NEXT_DETECT_MEMORY
+next::MemorySupervisor memorySupervisor;
+#endif
 
 jlong createPlayer(JNIEnv *env,
                  jobject thzz, jstring path) {
@@ -53,6 +61,10 @@ void stop(JNIEnv *env,
     player->stop();
     delete player;
 
+#ifdef NEXT_DETECT_MEMORY
+    memorySupervisor.calculate();
+#endif
+
 }
 void forward(JNIEnv *env,
                       jobject  /*thzz*/, jlong ptr, jlong duration) {
@@ -99,3 +111,24 @@ Java_com_mxtech_av_TinyPlayer_nativeInitClass(
 jclass clazz) {
     initClass(env, clazz);
 }
+
+#ifdef NEXT_DETECT_MEMORY
+extern "C" {
+
+ void _on_posix_memalign(void *p, size_t size) {
+     memorySupervisor.on_posix_memalign(p, size);
+ }
+ void _on_free(void *p) {
+//     next_log_tag("mem", "_on_free %d", __LINE__);
+     memorySupervisor.on_free(p);
+ }
+ void _on_realloc_(void *p, size_t size) {
+     memorySupervisor.on_realloc_(p, size);
+//     next_log_tag("mem", "_on_realloc_ %zu", size);
+ }
+ void _on_post_realloc_(void* p, size_t size) {
+     memorySupervisor.on_post_realloc_(p, size);
+ }
+
+}
+#endif

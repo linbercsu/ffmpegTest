@@ -28,3 +28,14 @@ cd app/src/main/cpp
 ```shell script
 ./gradlew app:assembleDebug
 ```
+
+## detect memory leak
+
+1. recover '/app/src/main/cpp/ffmpeg/libavutil/mem.c' with '/app/mem.c'  
+
+2. rebuild ffmpeg
+
+3. uncomment '//#define NEXT_DETECT_MEMORY' in JNIPlayer.cpp
+
+4. rebuild app
+
