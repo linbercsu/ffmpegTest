@@ -3,7 +3,7 @@
 //
 
 #include "VideoPackageQueue.h"
-
+#include "Log.h"
 extern "C" {
 #include "libavformat/avformat.h"
 }
@@ -40,8 +40,45 @@ namespace next {
         return true;
     }
 
-    struct AVPacket *VideoPackageQueue::getPkt() {
+    AVPacket *VideoPackageQueue::getPkt(bool *cleared) {
         std::lock_guard<std::mutex> l(mLock);
+
+        auto clear = needClear;
+        needClear = false;
+
+        if (clear) {
+            *cleared = true;
+//            bool erase = false;
+            while (true) {
+//                next_log_tag("queue", "getPkt %d", __LINE__);
+                bool find = false;
+                for (auto ite = mPktList.begin(); ite != mPktList.end(); ite++) {
+                    auto ptr = ite.operator*();
+                    if (ptr == nullptr) {
+                        find = true;
+                        break;
+                    }
+                }
+
+                if (find) {
+                    for (auto ite = mPktList.begin(); ite != mPktList.end();) {
+                        auto ptr = ite.operator*();
+                        if (ptr == nullptr) {
+                            mPktList.erase(ite);
+                            break;
+                        } else {
+                            mSize -= ptr->size;
+                            av_packet_unref(ptr);
+                            av_packet_free(&ptr);
+                            ite = mPktList.erase(ite);
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
         if (mPktList.empty()) {
             return nullptr;
         }
@@ -89,21 +126,36 @@ namespace next {
         needClear = false;
 
         if (clear) {
+
 //            bool erase = false;
-            for (auto ite = mPktList.begin(); ite != mPktList.end();) {
-                auto ptr = ite.operator*();
-                if (ptr == nullptr) {
-//                    erase = true;
-                    ite = mPktList.erase(ite);
-                    break;
+            while (true) {
+                bool find = false;
+                for (auto ite = mPktList.begin(); ite != mPktList.end(); ite++) {
+                    auto ptr = ite.operator*();
+                    if (ptr == nullptr) {
+                        find = true;
+                        break;
+                    }
+                }
+
+                if (find) {
+                    for (auto ite = mPktList.begin(); ite != mPktList.end();) {
+                        auto ptr = ite.operator*();
+                        if (ptr == nullptr) {
+                            mPktList.erase(ite);
+                            break;
+                        } else {
+                            mSize -= ptr->size;
+                            av_packet_unref(ptr);
+                            av_packet_free(&ptr);
+                            ite = mPktList.erase(ite);
+                        }
+                    }
                 } else {
-                    mSize -= ptr->size;
-                    av_packet_unref(ptr);
-                    av_packet_free(&ptr);
-                    ite = mPktList.erase(ite);
+                    break;
                 }
             }
-        }
+            }
 
         return clear;
     }

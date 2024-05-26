@@ -1,6 +1,7 @@
 package com.mxtech.av;
 
 import android.opengl.GLSurfaceView;
+import android.view.View;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -12,8 +13,27 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
 
     long ref;
     String path;
+    boolean stopped;
     public TinyPlayer(String path) {
         this.path = path;
+    }
+
+    public void bindGLSurfaceView(GLSurfaceView surfaceView) {
+        surfaceView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View view) {
+
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View view) {
+                if (stopped) {
+                    nativeStop(ref);
+                    ref = 0;
+                }
+            }
+        });
+        surfaceView.setRenderer(this);
     }
 
     public void play() {
@@ -45,7 +65,9 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     }
 
     public void stop() {
-        nativeStop(ref);
+//        nativeStop(ref);
+//        ref = 0;
+        stopped = true;
     }
 
     @Override

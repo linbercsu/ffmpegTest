@@ -23,7 +23,7 @@ namespace next {
         AVRational getTimebase();
         bool enqueue(struct AVPacket* pkt);
         void setNeedClear();
-        struct AVPacket* getPkt();
+        AVPacket *getPkt(bool *pBoolean);
 
         void end();
         bool isEnd();

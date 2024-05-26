@@ -143,12 +143,20 @@ namespace next {
 
         reusedVideoFrame = av_frame_alloc();
         while (!isStopped()) {
-            if (mQueueRef->getClearFlagAndClear()) {
+//            if (mQueueRef->getClearFlagAndClear()) {
+//                mFrameQueue.clear();
+//                avcodec_flush_buffers(dec_ctx);
+//            }
+
+
+            bool clear = false;
+            AVPacket *pkt = mQueueRef->getPkt(&clear);
+            if (clear) {
                 mFrameQueue.clear();
                 avcodec_flush_buffers(dec_ctx);
             }
 
-            AVPacket *pkt = mQueueRef->getPkt();
+//            AVPacket *pkt = mQueueRef->getPkt(nullptr);
 
             if (pkt == nullptr) {
                 render();

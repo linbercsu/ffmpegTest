@@ -371,18 +371,25 @@ namespace next {
             return mStopped.load();
         }
 
+        void onSeek() {
+            mSeekMark.fetch_add(1);
+        }
+
         void run() {
             AVFrame *frame = nullptr;
             bool resetPts = true;
             int64_t lastFramePts = 0;
             int64_t lastFrameDuration = 0;
+            int32_t seekMark = mSeekMark.load();
             while (!isStopped()) {
+//                next_log_tag("audio", "output %d", __LINE__);
                 if (frame != nullptr) {
                     av_frame_free(&frame);
                     frame = nullptr;
                 }
 
                 if (mAudioRenderRef->isPaused()) {
+                    next_log_tag("audio", "pause %d", __LINE__);
                     while (true) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
                         if (!mAudioRenderRef->isPaused() || mAudioRenderRef->isStopped()) {
@@ -399,8 +406,15 @@ namespace next {
 
                 frame = mFrameQueueRef->pop();
                 if (frame == nullptr) {
+//                    next_log_tag("audio", "output waiting frame%d", __LINE__);
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 } else {
+                    int32_t newSeekMark = mSeekMark.load();
+                    if (seekMark != newSeekMark) {
+                        seekMark = newSeekMark;
+                        resetPts = true;
+                    }
+                    /*
                     //seek backward
                     if (lastFramePts > frame->pts) {
                         resetPts = true;
@@ -411,6 +425,7 @@ namespace next {
 
                     lastFramePts = frame->pts;
                     lastFrameDuration = frame->pkt_duration;
+                     */
                     if (resetPts) {
                         next_log_tag("audio", "reset pts %ld, %d", frame->pts, __LINE__);
                         mMediaClockRef->resetStartPts(frame->pts);
@@ -429,6 +444,7 @@ namespace next {
                         auto written = 0;
                         while (!isStopped()) {
                             auto ret = AAudioStream_write(mAudioDeviceRef->stream, frame->data[0] + written, frame->nb_samples - written, 500000000);
+                            next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
                             mMediaClockRef->calculatePts();
                             if (ret < 0) {
                                 next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
@@ -464,6 +480,7 @@ namespace next {
         }
         
     private:
+        std::atomic_int32_t mSeekMark{0};
         std::atomic_bool mStopped{false};
         std::thread* mThread;
         bool mFirstFrame{true};
@@ -538,15 +555,26 @@ namespace next {
         reusedAudioFrame = av_frame_alloc();
         bool resetFirstPts = true;
         while (!isStopped()) {
-            if (mQueueRef->getClearFlagAndClear()) {
+//            next_log_tag("audio", "render %d", __LINE__);
+//            if (mQueueRef->getClearFlagAndClear()) {
+//                mFrameQueue.clear();
+//
+//                avcodec_flush_buffers(dec_ctx);
+//                mDataContext->frameBuffer.clear();
+//                resetFirstPts = true;
+//                mAudioOutput->onSeek();
+//            }
+
+            bool clear = false;
+            AVPacket *pkt = mQueueRef->getPkt(&clear);
+            if (clear) {
                 mFrameQueue.clear();
 
                 avcodec_flush_buffers(dec_ctx);
                 mDataContext->frameBuffer.clear();
                 resetFirstPts = true;
+                mAudioOutput->onSeek();
             }
-
-            AVPacket *pkt = mQueueRef->getPkt();
 
             if (pkt == nullptr) {
 //                next_log_tag("audio", "waiting pkt %d", __LINE__);

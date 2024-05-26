@@ -15,6 +15,7 @@ namespace next {
     }
 
     Player::~Player() {
+        next_log_tag("player", "delete player. %d", __LINE__);
         delete mAudioRender;
         delete mVideoRender;
     }

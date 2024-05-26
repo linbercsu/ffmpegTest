@@ -51,6 +51,7 @@ void stop(JNIEnv *env,
     auto *player = reinterpret_cast<next::Player *>(ptr);
 
     player->stop();
+    delete player;
 
 }
 void forward(JNIEnv *env,

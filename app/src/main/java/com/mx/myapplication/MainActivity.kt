@@ -39,7 +39,8 @@ class MainActivity : AppCompatActivity() {
         player = TinyPlayer("/sdcard/Download/joke.mp4")
         player.play()
 
-        glSurfaceView.setRenderer(player)
+        player.bindGLSurfaceView(glSurfaceView);
+//        glSurfaceView.setRenderer(player)
 
         findViewById<View>(R.id.start).setOnClickListener {
             player.start()

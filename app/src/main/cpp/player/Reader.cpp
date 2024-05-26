@@ -111,13 +111,13 @@ namespace next {
                 if (ret != 0) {
                     throw std::bad_cast();
                 }
-                start = av_rescale_q(seek,
-                                                  AV_TIME_BASE_Q,
-                                                  video_stream->time_base);
-                ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
-                if (ret != 0) {
-                    throw std::bad_cast();
-                }
+//                start = av_rescale_q(seek,
+//                                                  AV_TIME_BASE_Q,
+//                                                  video_stream->time_base);
+//                ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
+//                if (ret != 0) {
+//                    throw std::bad_cast();
+//                }
                 mVideoPktQueueRef->setNeedClear();
                 mAudioPktQueueRef->setNeedClear();
 
@@ -174,12 +174,11 @@ namespace next {
             pkt = nullptr;
         }
 
-        mVideoPktQueueRef->end();
+//        mVideoPktQueueRef->end();
 
-        while (!isStopped()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            //todo
-        }
+//        while (!isStopped()) {
+//            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+//        }
     }
 
     void Reader::stop() {
