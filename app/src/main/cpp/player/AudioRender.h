@@ -21,7 +21,7 @@ namespace next {
     class VideoPackageQueue;
     class AudioDevice;
     class AudioOutput;
-    class DataContext;
+    class AudioDataContext;
 
     class AudioRender {
     public:
@@ -49,7 +49,7 @@ namespace next {
         AudioOutput* mAudioOutput{nullptr};
         std::atomic_bool mStopped{false};
         std::atomic_bool mPaused{false};
-        DataContext* mDataContext{nullptr};
+        AudioDataContext* mDataContext{nullptr};
         struct AVFrame* reusedAudioFrame{nullptr};
     };
 }

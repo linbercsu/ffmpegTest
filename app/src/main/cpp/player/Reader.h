@@ -11,7 +11,7 @@
 #include "VideoPackageQueue.h"
 
 namespace next {
-    class ContextData;
+    class ReaderContextData;
     class VideoPackageQueue;
 
     class ReaderCallback {
@@ -46,7 +46,7 @@ namespace next {
 
         std::thread* mThread{nullptr};
         std::string mPath;
-        ContextData* mContextData{nullptr};
+        ReaderContextData* mContextData{nullptr};
         std::atomic_int64_t mSeekPosition{0};
     };
 }

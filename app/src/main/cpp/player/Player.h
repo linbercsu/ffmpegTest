@@ -38,8 +38,8 @@ namespace next {
         int64_t currentPosition();
     private:
         std::string mPath;
-        VideoRender* mVideoRender;
-        AudioRender* mAudioRender;
+        VideoRender* mVideoRender{nullptr};
+        AudioRender* mAudioRender{nullptr};
         VideoPackageQueue mVideoPackageQueue;
         VideoPackageQueue mAudioPackageQueue;
         Reader mReader;

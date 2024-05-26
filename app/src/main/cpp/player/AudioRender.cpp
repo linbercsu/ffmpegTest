@@ -173,9 +173,10 @@ namespace next {
         }
     };
 
-    class DataContext {
+    class AudioDataContext {
     public:
-        ~DataContext() {
+        ~AudioDataContext() {
+
             if (decoderContext != nullptr) {
                 avcodec_free_context(&decoderContext);
                 decoderContext = nullptr;
@@ -311,6 +312,7 @@ namespace next {
             frame->nb_samples = ret;
 
             audioFrameBuffer.sendFrame(frame, ret);
+            av_frame_free(&frame);
 
             while (true) {
                 if (!audioFrameBuffer.canReceive(samplesPerFrame)) {
@@ -463,7 +465,7 @@ namespace next {
                         auto written = 0;
                         while (!isStopped()) {
                             auto ret = AAudioStream_write(mAudioDeviceRef->stream, frame->data[0] + written, frame->nb_samples - written, 500000000);
-                            next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
+//                            next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
                             mMediaClockRef->calculatePts();
                             if (ret < 0) {
                                 next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
@@ -493,10 +495,6 @@ namespace next {
                 }
             }
         }
-
-        int64_t calculateDurationInMicro(int sampleCount, int sampleRate) {
-            return (((int64_t)sampleCount) * 1000000)/ sampleRate;
-        }
         
     private:
         std::atomic_int32_t mSeekMark{0};
@@ -507,10 +505,6 @@ namespace next {
         AudioDevice* mAudioDeviceRef;
         LockFrameQueue* mFrameQueueRef;
         AudioRender* mAudioRenderRef;
-        int mSampleCount{0};
-        int64_t startPts{0};
-        int64_t currentPts{0};
-        int64_t startTime{0};
     };
 
     AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
@@ -549,7 +543,7 @@ namespace next {
         runInternal();
     }
     void AudioRender::runInternal() {
-        mDataContext = new DataContext();
+        mDataContext = new AudioDataContext();
         int ret = 0;
         AVCodecParameters *codecParameters = nullptr;
         AVRational timeBase;

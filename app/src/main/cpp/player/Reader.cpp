@@ -15,9 +15,9 @@ extern "C" {
 #define next_log(format, ...) __android_log_print(6, "reader", format, __VA_ARGS__)
 
 namespace next {
-    class ContextData {
+    class ReaderContextData {
     public:
-        ~ContextData() {
+        ~ReaderContextData() {
             if (fmt_ctx != nullptr) {
                 avformat_close_input(&fmt_ctx);
                 fmt_ctx = nullptr;
@@ -55,7 +55,7 @@ namespace next {
     }
 
     void Reader::open() {
-        mContextData = new ContextData();
+        mContextData = new ReaderContextData();
         int ret = 0;
         ret = avformat_open_input(&(mContextData->fmt_ctx), mPath.c_str(), nullptr, nullptr);
         next_log("avformat_open_input ret %d, %d", ret, __LINE__);

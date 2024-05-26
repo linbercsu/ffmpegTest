@@ -15,7 +15,7 @@ namespace next {
         std::lock_guard<std::mutex> l(mLock);
         mCodecParametersGot = true;
         mTimeBase = timebase;
-        avcodec_parameters_copy(&mCodecParameters, parameters);
+        avcodec_parameters_copy(mCodecParameters, parameters);
     }
 
     struct AVCodecParameters* VideoPackageQueue::getCodecParameters() {
@@ -24,7 +24,7 @@ namespace next {
             return nullptr;
         }
 
-        return &mCodecParameters;
+        return mCodecParameters;
     }
 
     bool VideoPackageQueue::enqueue(AVPacket *pkt) {
@@ -164,5 +164,13 @@ namespace next {
         std::lock_guard<std::mutex> l(mLock);
         needClear = true;
         mPktList.emplace_back(nullptr);
+    }
+
+    VideoPackageQueue::~VideoPackageQueue() {
+        avcodec_parameters_free(&mCodecParameters);
+    }
+
+    VideoPackageQueue::VideoPackageQueue() {
+        mCodecParameters = avcodec_parameters_alloc();
     }
 }

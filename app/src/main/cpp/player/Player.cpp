@@ -16,8 +16,14 @@ namespace next {
 
     Player::~Player() {
         next_log_tag("player", "delete player. %d", __LINE__);
-        delete mAudioRender;
-        delete mVideoRender;
+        if (mVideoRender != nullptr) {
+            delete mVideoRender;
+        }
+
+        if (mAudioRender != nullptr) {
+            delete mAudioRender;
+        }
+
     }
 
     void Player::start() {
@@ -30,8 +36,12 @@ namespace next {
 
     void Player::stop() {
         mReader.stop();
-        mAudioRender->stop();
-        mVideoRender->stop();
+        if (mAudioRender != nullptr)
+            mAudioRender->stop();
+
+        if (mVideoRender != nullptr) {
+            mVideoRender->stop();
+        }
     }
 
     void Player::seek(int64_t position) {
@@ -40,15 +50,18 @@ namespace next {
 
     //gl thread
     void Player::onSurfaceCreated() {
+        if (mVideoRender != nullptr)
         mVideoRender->onSurfaceCreated();
     }
 
     //gl thread
     void Player::onDrawFrame() {
+        if (mVideoRender != nullptr)
         mVideoRender->onDrawFrame();
     }
 
     void Player::onSurfaceChanged(int w, int h) {
+        if (mVideoRender != nullptr)
         mVideoRender->onSurfaceChanged(w, h);
     }
 
