@@ -16,6 +16,7 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     boolean stopped;
 
     int speed = 1;
+    int effect = 0;
     public TinyPlayer(String path) {
         this.path = path;
     }
@@ -72,6 +73,15 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
         nativeUpdateSpeed(ref, speed);
     }
 
+    public void updateEffect() {
+        if (effect == 0) {
+            effect = 1;
+        } else {
+            effect = 0;
+        }
+        nativeUpdateEffect(ref, effect);
+    }
+
     public void backward(long duration) {
         nativeBackward(ref, duration);
     }
@@ -104,6 +114,7 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     private native void nativeBackward(long ref, long duration);
     private native void nativeForward(long ref, long duration);
     private native void nativeUpdateSpeed(long ref, int speed);
+    private native void nativeUpdateEffect(long ref, int effect);
 
     private native void nativeOnSurfaceCreated(long ref);
     private native void nativeOnSurfaceChanged(long ref, int w, int h);

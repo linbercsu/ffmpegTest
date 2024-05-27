@@ -32,6 +32,8 @@ namespace next {
 
         void release();
 
+        void updateEffect(int effectIndex);
+
         void onSurfaceCreated();
 
         void onDrawFrame();
@@ -58,7 +60,8 @@ namespace next {
         MediaClock* mClock;
         GLuint textures[1];
         GLuint texture;
-        nx_effect::BaseEffect* effect;
+        nx_effect::BaseEffect* effect{nullptr};
+        int mEffectIndex{0};
         int width;
         int height;
         struct AVFrame* reusedVideoFrame{nullptr};

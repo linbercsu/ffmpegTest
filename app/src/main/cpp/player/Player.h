@@ -38,6 +38,7 @@ namespace next {
         int64_t currentPosition();
 
         void setSpeed(int speed);
+        void updateEffect(int effect);
 
     private:
         std::string mPath;

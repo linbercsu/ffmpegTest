@@ -23,7 +23,7 @@ namespace nx_effect {
         ZEffect();
 
         void init() override;
-
+        virtual void initProgram();
         void draw(int64_t time, GLuint currentTexture, int w, int h) override;
 
     private:
@@ -32,7 +32,7 @@ namespace nx_effect {
         void copyNewTexture(GLuint target, GLuint currentTexture, int w, int h);
 
         void doDraw(GLuint pTexture);
-
+    protected:
         GLuint program;
         ns_ZEffect::Location location;
     };

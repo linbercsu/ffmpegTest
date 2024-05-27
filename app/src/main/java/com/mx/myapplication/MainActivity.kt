@@ -60,6 +60,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.speed).setOnClickListener {
             player.updateSpeed()
         }
+        findViewById<View>(R.id.gray).setOnClickListener {
+            player.updateEffect()
+        }
         // Example of a call to a native method
 //        val textView = findViewById<TextView>(R.id.sample_text)
         /*

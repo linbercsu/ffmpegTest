@@ -12,6 +12,7 @@
 #include <GLES2/gl2.h>
 #include "libyuv.h"
 #include "ZEffect.h"
+#include "GrayEffect.h"
 #include "Releasable.h"
 
 extern "C" {
@@ -20,6 +21,21 @@ extern "C" {
 
 namespace next {
     bool lastRender = false;
+
+    namespace {
+        nx_effect::BaseEffect* createEffect(int effectIndex) {
+            nx_effect::BaseEffect *effect;
+            if (effectIndex == 1) {
+                effect = new nx_effect::GrayEffect();
+            } else {
+                effect = new nx_effect::ZEffect();
+            }
+
+            effect->init();
+
+            return effect;
+        }
+    }
 
     class DataContext {
     public:
@@ -78,7 +94,7 @@ namespace next {
     VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 1024 * 250), mClock(clock) {
         mThread = new std::thread(&VideoRender::run, this);
-        effect = new nx_effect::ZEffect();
+//        effect = createEffect(mEffectIndex);
     }
 
     VideoRender::~VideoRender() {
@@ -370,7 +386,6 @@ namespace next {
                         GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
 
 
-        effect->init();
     }
 
     //gl thread
@@ -378,6 +393,10 @@ namespace next {
         std::lock_guard<std::mutex> l(mFrameLock);
         if (mCurrentFrame == nullptr) {
             return;
+        }
+
+        if (effect == nullptr) {
+            effect = createEffect(mEffectIndex);
         }
 
         int frameWidth = mCurrentFrame->width;
@@ -422,5 +441,20 @@ namespace next {
 
     bool VideoRender::isStopped() {
         return mStopped.load();
+    }
+
+    void VideoRender::updateEffect(int effectIndex) {
+        if (effectIndex == mEffectIndex) {
+            return;
+        }
+
+        mEffectIndex = effectIndex;
+        std::lock_guard<std::mutex> l(mFrameLock);
+        if (effect != nullptr) {
+            delete effect;
+            effect = nullptr;
+        }
+
+//        effect = createEffect(effectIndex);
     }
 }

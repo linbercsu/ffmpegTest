@@ -52,13 +52,17 @@ namespace nx_effect {
 
     void ZEffect::init() {
 
-        program = nx_effect::createProgram(gVertexShader, gFragmentShader);
 
+        initProgram();
 //        createTexture();
 
         location.position = glGetAttribLocation(program, "position");
         location.texCoordinate = glGetAttribLocation(program, "texCoordinate");
         location.texture = glGetUniformLocation(program, "texture");
+    }
+
+    void ZEffect::initProgram() {
+        program = nx_effect::createProgram(gVertexShader, gFragmentShader);
     }
 
     void ZEffect::draw(int64_t time, GLuint currentTexture, int w, int h) {

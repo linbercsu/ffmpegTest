@@ -87,6 +87,13 @@ void updateSpeed(JNIEnv *env,
     player->setSpeed(speed);
 
 }
+void updateEffect(JNIEnv *env,
+                      jobject  /*thzz*/, jlong ptr, jint effect) {
+    auto *player = reinterpret_cast<next::Player *>(ptr);
+
+    player->updateEffect(effect);
+
+}
 
 void pause(JNIEnv *env,
                       jobject  /*thzz*/, jlong ptr) {
@@ -106,6 +113,7 @@ const JNINativeMethod methods[] =
                 {"nativeForward", "(JJ)V",                                     (void *) forward},
                 {"nativeBackward", "(JJ)V",                                     (void *) backward},
                 {"nativeUpdateSpeed", "(JI)V",                                     (void *) updateSpeed},
+                {"nativeUpdateEffect", "(JI)V",                                     (void *) updateEffect},
                 {"start", "(J)V",                                     (void *) start},
                 {"pause",    "(J)V",                                                      (void *) pause}
         };

@@ -99,4 +99,8 @@ namespace next {
         int64_t c = currentPosition();
         mReader.seekForward(c);
     }
+
+    void Player::updateEffect(int effect) {
+        mVideoRender->updateEffect(effect);
+    }
 }

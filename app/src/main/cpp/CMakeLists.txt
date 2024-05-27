@@ -91,6 +91,7 @@ add_library( # Sets the name of the library.
         effect/TextureCopy.cpp
         effect/TestEffect.cpp
         effect/ZEffect.cpp
+        effect/GrayEffect.cpp
         )
 
 INCLUDE_DIRECTORIES(
