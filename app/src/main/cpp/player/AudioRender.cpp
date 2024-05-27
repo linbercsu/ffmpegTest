@@ -473,7 +473,7 @@ namespace next {
                     next_log_tag("audio", "pause %d", __LINE__);
                     while (true) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                        if (!mAudioRenderRef->isPaused() || mAudioRenderRef->isStopped()) {
+                        if (!mAudioRenderRef->isPaused() || isStopped()) {
                             break;
                         }
                     }
