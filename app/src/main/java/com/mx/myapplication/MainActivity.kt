@@ -2,6 +2,7 @@ package com.mx.myapplication
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.opengl.GLSurfaceView
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
@@ -16,6 +17,7 @@ import com.mxtech.av.AsyncMediaConverter
 import com.mxtech.av.AsyncMediaConverter2
 import com.mxtech.av.GLVideo
 import com.mxtech.av.TinyPlayer
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private lateinit var glSurfaceView: GLSurfaceView
@@ -27,6 +29,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val intent = intent
+
+        val uri = intent.data
+        val contentUri = ContentUtils.getFileUriFromContentUri(this, uri)
+        val fileUri = if (contentUri != null) {
+            contentUri
+        } else {
+            Uri.fromFile(File("/sdcard/Download/joke.mp4"))
+        }
+
+
         setContentView(R.layout.activity_main)
         val root = findViewById<FrameLayout>(R.id.gl_root)
         glSurfaceView = GLSurfaceView(root.context)
@@ -36,7 +49,8 @@ class MainActivity : AppCompatActivity() {
 
         root.addView(glSurfaceView, -1, -1)
 
-        player = TinyPlayer("/sdcard/Download/joke.mp4")
+//        player = TinyPlayer("/sdcard/Download/joke.mp4")
+        player = TinyPlayer(fileUri.toString())
         player.play()
 
         player.bindGLSurfaceView(glSurfaceView);
