@@ -76,7 +76,7 @@ namespace next {
 
 
     VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
-                                                                mFrameQueue(1024 * 1024 * 50), mClock(clock) {
+                                                                mFrameQueue(1024 * 1024 * 250), mClock(clock) {
         mThread = new std::thread(&VideoRender::run, this);
         effect = new nx_effect::ZEffect();
     }

@@ -93,4 +93,10 @@ namespace next {
 
         mReader.seekForward(newPosition);
     }
+
+    void Player::setSpeed(int speed) {
+        mMediaClock.setSpeed(speed);
+        int64_t c = currentPosition();
+        mReader.seekForward(c);
+    }
 }

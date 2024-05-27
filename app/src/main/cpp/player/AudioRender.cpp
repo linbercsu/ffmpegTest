@@ -9,6 +9,8 @@
 #include "Log.h"
 #include "Releasable.h"
 #include <chrono>
+#include "sonic.h"
+#include "define.h"
 
 using namespace std::chrono;
 
@@ -190,17 +192,27 @@ namespace next {
 
     class AudioDevice {
     public:
-        AudioDevice() {
+        AudioDevice(){
 
         }
 
         void clear() {
 //            AAudioStream_requestStop(stream);
             AAudioStream_close(stream);
-
+            if (mSonicStream != nullptr) {
+                sonicDestroyStream(mSonicStream);
+                mSonicStream = nullptr;
+            }
             if (swr_ctx != nullptr) {
                 swr_free(&swr_ctx);
                 swr_ctx = nullptr;
+            }
+        }
+        void reset() {
+//            AAudioStream_requestStop(stream);
+            if (mSonicStream != nullptr) {
+                sonicDestroyStream(mSonicStream);
+                mSonicStream = nullptr;
             }
         }
 
@@ -284,7 +296,8 @@ namespace next {
                                           sampleRate, size);
         }
 
-        void convert(AVFrame *oldFrame, LockFrameQueue& queue, AudioFrameBuffer& audioFrameBuffer) {
+        void convert(AVFrame *oldFrame, LockFrameQueue &queue, AudioFrameBuffer &audioFrameBuffer,
+                     int pSpeed) {
             int ret;
             int dst_nb_samples;
 
@@ -296,6 +309,7 @@ namespace next {
 
             auto targetSize = std::max(samplesPerFrame, dst_nb_samples);
             auto frame = getAudioFrame(targetSize);
+            FrameAutoRelease r(frame);
             ret = av_frame_make_writable(frame);
             if (ret < 0) {
                 throw std::bad_alloc();
@@ -311,8 +325,53 @@ namespace next {
 
             frame->nb_samples = ret;
 
-            audioFrameBuffer.sendFrame(frame, ret);
-            av_frame_free(&frame);
+            int speed = pSpeed;
+//            next_log_tag("audio", "convert %d %d %d", mSpeed, speed, __LINE__);
+            if (speed != mSpeed) {
+                mSpeed = speed;
+
+                if (mSonicStream != nullptr) {
+                    sonicDestroyStream(mSonicStream);
+                    mSonicStream = nullptr;
+                }
+            }
+
+
+            if (mSonicStream == nullptr) {
+                mSonicStream = sonicCreateStream(sampleRate, channelCount);
+                sonicSetSpeed(mSonicStream, (float)mSpeed);
+            }
+
+            if (targetFormat == AV_SAMPLE_FMT_S16) {
+                sonicWriteShortToStream(mSonicStream, (const short *)(frame->data[0]), frame->nb_samples);
+            } else if (targetFormat == AV_SAMPLE_FMT_FLT) {
+                sonicWriteFloatToStream(mSonicStream, (const float *)(frame->data[0]), frame->nb_samples);
+            }
+
+            bool send = false;
+            while (true) {
+                if (targetFormat == AV_SAMPLE_FMT_S16) {
+                    ret = sonicReadShortFromStream(mSonicStream, (short *) (frame->data[0]),
+                                                   samplesPerFrame);
+                } else if (targetFormat == AV_SAMPLE_FMT_FLT) {
+                    ret = sonicReadFloatFromStream(mSonicStream, (float *) (frame->data[0]),
+                                                   samplesPerFrame);
+                }
+
+
+                if (ret > 0) {
+                    send = true;
+                    audioFrameBuffer.sendFrame(frame, ret);
+                } else {
+                    break;
+                }
+            }
+
+            if (!send) {
+                return;
+            }
+
+//            av_frame_free(&frame);
 
             while (true) {
                 if (!audioFrameBuffer.canReceive(samplesPerFrame)) {
@@ -329,8 +388,8 @@ namespace next {
                                            (AVRational) {1, sampleRate},
                                            AV_TIME_BASE_Q);
 
-                newFrame->pts = pts + startPts;
-                newFrame->pkt_duration = duration;
+                newFrame->pts = pts * mSpeed + startPts;
+//                newFrame->pkt_duration = duration;
                 samples_count += newFrame->nb_samples;
 
                 queue.pushFrame(newFrame);
@@ -366,6 +425,8 @@ namespace next {
         int64_t samples_count{0};
         int32_t samplesPerFrame;
         int64_t startPts{0};
+        sonicStream mSonicStream{nullptr};
+        int mSpeed{DEFAULT_SPEED};
     };
     
     class AudioOutput {
@@ -508,7 +569,7 @@ namespace next {
     };
 
     AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
-                                                                mFrameQueue(1024 * 1024 * 10), mMediaClockRef(clock) {
+                                                                mFrameQueue(1024 * 1024 * 20), mMediaClockRef(clock) {
         mAudioDevice = new AudioDevice();
         mThread = new std::thread(&AudioRender::run, this);
 
@@ -579,6 +640,8 @@ namespace next {
 
         reusedAudioFrame = av_frame_alloc();
         bool resetFirstPts = true;
+        auto speed = mMediaClockRef->getSpeed();
+        next_log_tag("audio","speed %d %d", speed,__LINE__);
         while (!isStopped()) {
 //            next_log_tag("audio", "render %d", __LINE__);
 
@@ -586,6 +649,8 @@ namespace next {
             AVPacket *pkt = mQueueRef->getPkt(&clear);
             if (clear) {
                 mFrameQueue.clear();
+                mAudioDevice->reset();
+                speed = mMediaClockRef->getSpeed();
 
                 avcodec_flush_buffers(dec_ctx);
                 mDataContext->frameBuffer.clear();
@@ -612,7 +677,7 @@ namespace next {
 
 //            next_log_tag("audio", "got pkt %d", __LINE__);
 
-            decode(dec_ctx, pkt, reusedAudioFrame);
+            decode(dec_ctx, pkt, reusedAudioFrame, speed);
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
 //            av_packet_unref(pkt);
@@ -622,7 +687,7 @@ namespace next {
         }
     }
 
-    void AudioRender::decode(AVCodecContext *dec, const AVPacket *package, AVFrame *videoFrame) {
+    void AudioRender::decode(AVCodecContext *dec, const AVPacket *package, AVFrame *videoFrame, int speed) {
 
         int ret;
         ret = avcodec_send_packet(dec, package);
@@ -654,7 +719,7 @@ namespace next {
                     throw DecoderException(ret);
                 }
 
-                onFrame(videoFrame, dec->pkt_timebase);
+                onFrame(videoFrame, dec->pkt_timebase, speed);
 
                 av_frame_unref(videoFrame);
                 ret = avcodec_send_packet(dec, package);
@@ -679,14 +744,14 @@ namespace next {
                 throw DecoderException(ret);
             }
 
-            onFrame(videoFrame, dec->pkt_timebase);
+            onFrame(videoFrame, dec->pkt_timebase, speed);
 
             av_frame_unref(videoFrame);
         }
 
     }
 
-    void AudioRender::onFrame(struct AVFrame *frame, AVRational timebase) {
+    void AudioRender::onFrame(AVFrame *frame, AVRational timebase, int speed) {
 //        int64_t p = av_frame_get_best_effort_timestamp(frame);
 
 //        p = av_rescale_q(p,
@@ -694,7 +759,7 @@ namespace next {
 //                         AV_TIME_BASE_Q);
 //
 
-        mAudioDevice->convert(frame, mFrameQueue, mDataContext->frameBuffer);
+        mAudioDevice->convert(frame, mFrameQueue, mDataContext->frameBuffer, speed);
 //        newFrame->pts = p;
     }
 

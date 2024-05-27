@@ -56,6 +56,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.forward).setOnClickListener {
             player.forward(10 * 1000 * 1000)
         }
+
+        findViewById<View>(R.id.speed).setOnClickListener {
+            player.updateSpeed()
+        }
         // Example of a call to a native method
 //        val textView = findViewById<TextView>(R.id.sample_text)
         /*

@@ -38,8 +38,8 @@ namespace next {
         bool isStopped();
     private:
         void render();
-        void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame);
-        void onFrame(struct AVFrame *frame, AVRational timebase);
+        void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame, int speed);
+        void onFrame(AVFrame *frame, AVRational timebase, int speed);
     private:
         MediaClock* mMediaClockRef;
         VideoPackageQueue* mQueueRef;

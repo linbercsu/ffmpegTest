@@ -90,10 +90,18 @@ namespace next {
         while (!isStopped()) {
             int64_t seek = getSeekPosition();
             if (seek != -1) {
+//                int64_t start = av_rescale_q(seek,
+//                                                  AV_TIME_BASE_Q,
+//                                                  audio_stream->time_base);
+//                ret = av_seek_frame(fmt_ctx, audio_stream_index, start, AVSEEK_FLAG_BACKWARD);
+//                if (ret != 0) {
+//                    throw std::bad_cast();
+//                }
+
                 int64_t start = av_rescale_q(seek,
                                                   AV_TIME_BASE_Q,
-                                                  audio_stream->time_base);
-                ret = av_seek_frame(fmt_ctx, audio_stream_index, start, AVSEEK_FLAG_BACKWARD);
+                                                  video_stream->time_base);
+                ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
                 if (ret != 0) {
                     throw std::bad_cast();
                 }

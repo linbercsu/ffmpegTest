@@ -82,6 +82,7 @@ add_library( # Sets the name of the library.
         player/Clock.cpp
         player/MediaClock.cpp
         player/Exception.cpp
+        player/sonic.c
         AudioConverter.cpp
         concurrent/Thread.cpp
         GLVideo.cpp

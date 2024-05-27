@@ -46,7 +46,16 @@ namespace next {
         int64_t last = mStartTime.load();
         auto elapsed = now - last;
         if (elapsed > 0) {
-            mPts.store(mStartPts + elapsed);
+            auto speed = mSpeed.load();
+            mPts.store(mStartPts + elapsed * speed);
         }
+    }
+
+    void MediaClock::setSpeed(int speed) {
+        mSpeed.store(speed);
+    }
+
+    int MediaClock::getSpeed() {
+        return mSpeed.load();
     }
 }

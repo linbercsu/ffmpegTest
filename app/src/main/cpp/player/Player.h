@@ -36,6 +36,9 @@ namespace next {
         void onDurationKnown(int64_t duration) override;
 
         int64_t currentPosition();
+
+        void setSpeed(int speed);
+
     private:
         std::string mPath;
         VideoRender* mVideoRender{nullptr};
