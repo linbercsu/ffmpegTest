@@ -76,6 +76,8 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     public void updateEffect() {
         if (effect == 0) {
             effect = 1;
+        } else if (effect == 1) {
+            effect = 2;
         } else {
             effect = 0;
         }

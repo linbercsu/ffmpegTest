@@ -13,6 +13,7 @@
 #include "libyuv.h"
 #include "ZEffect.h"
 #include "GrayEffect.h"
+#include "MirrorEffect.h"
 #include "Releasable.h"
 
 extern "C" {
@@ -26,6 +27,8 @@ namespace next {
         nx_effect::BaseEffect* createEffect(int effectIndex) {
             nx_effect::BaseEffect *effect;
             if (effectIndex == 1) {
+                effect = new nx_effect::MirrorEffect();
+            } else if (effectIndex == 2) {
                 effect = new nx_effect::GrayEffect();
             } else {
                 effect = new nx_effect::ZEffect();

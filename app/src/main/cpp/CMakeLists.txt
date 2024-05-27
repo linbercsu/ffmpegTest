@@ -92,6 +92,7 @@ add_library( # Sets the name of the library.
         effect/TestEffect.cpp
         effect/ZEffect.cpp
         effect/GrayEffect.cpp
+        effect/MirrorEffect.cpp
         )
 
 INCLUDE_DIRECTORIES(
