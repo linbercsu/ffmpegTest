@@ -39,6 +39,11 @@ class MainActivity : AppCompatActivity() {
             Uri.fromFile(File("/sdcard/Download/joke.mp4"))
         }
 
+        val path = if (fileUri.scheme == "file") {
+            fileUri.path
+        } else {
+            fileUri.toString()
+        }
 
         setContentView(R.layout.activity_main)
         val root = findViewById<FrameLayout>(R.id.gl_root)
@@ -50,7 +55,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(glSurfaceView, -1, -1)
 
 //        player = TinyPlayer("/sdcard/Download/joke.mp4")
-        player = TinyPlayer(fileUri.toString())
+        player = TinyPlayer(path)
         player.play()
 
         player.bindGLSurfaceView(glSurfaceView);
