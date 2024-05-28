@@ -21,20 +21,22 @@ namespace nx_effect {
 
     public:
         ZEffect();
+        virtual ~ZEffect();
 
         void init() override;
         virtual void initProgram();
-        void draw(int64_t time, GLuint currentTexture, int w, int h) override;
+        void draw(int64_t time, GLuint currentTexture, int w, int h, int i) override;
 
     private:
         void createTexture(int w, int h);
 
         void copyNewTexture(GLuint target, GLuint currentTexture, int w, int h);
 
-        void doDraw(GLuint pTexture);
+        void doDraw(GLuint pTexture, int i, int i1, int i2);
     protected:
         GLuint program;
         ns_ZEffect::Location location;
+        GLfloat* mTriangleTextures;
     };
 }
 

@@ -24,7 +24,7 @@ namespace nx_effect {
         TestEffect();
 
         void init() override;
-        void draw(int64_t time, GLuint currentTexture, int w, int h) override;
+        void draw(int64_t time, GLuint currentTexture, int w, int h, int i) override;
 
     private:
         void createTexture(int w, int h);

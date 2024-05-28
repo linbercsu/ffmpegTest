@@ -15,6 +15,7 @@
 #include "GrayEffect.h"
 #include "MirrorEffect.h"
 #include "Releasable.h"
+//#include <android/bitmap.h>
 
 extern "C" {
 #include "libavformat/avformat.h"
@@ -37,6 +38,34 @@ namespace next {
             effect->init();
 
             return effect;
+        }
+
+        int getCorrectWidth(AVFrame * frame) {
+            if (frame->width < 64) {
+                return 64;
+            }
+
+            if (frame->width < 128) {
+                return 128;
+            }
+
+            if (frame->width < 256) {
+                return 256;
+            }
+
+            if (frame->width < 512) {
+                return 512;
+            }
+
+            if (frame->width < 1024) {
+                return 1024;
+            }
+
+            if (frame->width < 2048) {
+                return 2048;
+            }
+
+            return 4096;
         }
     }
 
@@ -74,8 +103,12 @@ namespace next {
     }
 
     AVFrame *convert(AVFrame *pFrame) {
-        auto videoFrameConvertRGBA = alloc_picture(AV_PIX_FMT_RGBA, pFrame->width,
+        next_log("convert w:%d h:%d, %d", pFrame->width, pFrame->height, __LINE__);
+        auto newWidth = getCorrectWidth(pFrame);
+        auto videoFrameConvertRGBA = alloc_picture(AV_PIX_FMT_RGBA, newWidth,
                                                    pFrame->height);
+        //just use a useless field 'channels' to remember the padding.
+        videoFrameConvertRGBA->channels = (newWidth - pFrame->width) / 2;
 
         av_frame_make_writable(videoFrameConvertRGBA);
 
@@ -87,9 +120,28 @@ namespace next {
                            videoFrameConvertRGBA->data[0], videoFrameConvertRGBA->linesize[0],
                            pFrame->width,
                            pFrame->height
-
         );
 
+
+        if (newWidth != pFrame->width) {//align real image center
+            auto frameTemp = alloc_picture(AV_PIX_FMT_RGBA, newWidth,
+                                                       pFrame->height);
+            av_frame_make_writable(frameTemp);
+            frameTemp->channels = videoFrameConvertRGBA->channels;
+
+            int height = pFrame->height;
+            auto padding = 4 * (newWidth - pFrame->width) / 2;
+            auto stripe = videoFrameConvertRGBA->linesize[0];
+            auto count = pFrame->width * 4;
+            for (int i = 0; i < height; i++) {
+                std::memcpy((frameTemp->data[0]) + (stripe * i) + padding, (videoFrameConvertRGBA->data[0]) + (stripe * i), count);
+            }
+
+            av_frame_free(&videoFrameConvertRGBA);
+            videoFrameConvertRGBA = frameTemp;
+        }
+
+        
         return videoFrameConvertRGBA;
     }
 
@@ -158,10 +210,18 @@ namespace next {
         }
 
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
-
         mDataContext->decoderContext = avcodec_alloc_context3(decoder);
         auto dec_ctx = mDataContext->decoderContext;
 
+        next_log_tag("video", "info: codec id %d, source f:%d %d", codecParameters->codec_id, codecParameters->format, __LINE__);
+//        for (int i = 0; i < 1000; i++) {
+//            AVPixelFormat format = decoder->pix_fmts[i];
+//            if (format == AV_PIX_FMT_NONE) {
+//                break;
+//            }
+//            next_log_tag("video", "decode: :%d %d", format, __LINE__);
+//        }
+//        codecParameters->format = AV_PIX_FMT_YUV420P;
         ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
         dec_ctx->pkt_timebase = timeBase;
 
@@ -402,7 +462,8 @@ namespace next {
             effect = createEffect(mEffectIndex);
         }
 
-        int frameWidth = mCurrentFrame->width;
+        auto paddingRight = mCurrentFrame->channels;
+        int frameWidth = mCurrentFrame->width - paddingRight * 2;
         int frameHeight = mCurrentFrame->height;
 //        auto rate = calculateRate(frameWidth, frameHeight, width, height);
         float rate1 = width / (float )frameWidth;
@@ -427,7 +488,7 @@ namespace next {
 //        queueFree.push(pFrame);
 //        glBindTexture(GL_TEXTURE_2D, 0);
 
-        effect->draw(0, texture, width, height);
+        effect->draw(0, texture, mCurrentFrame->width, mCurrentFrame->height, paddingRight);
     }
 
     //gl thread

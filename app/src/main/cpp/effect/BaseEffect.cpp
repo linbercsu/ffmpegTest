@@ -50,7 +50,7 @@ namespace nx_effect {
 
     }
 
-    void BaseEffect::draw(int64_t time, GLuint currentTexture, int w, int h) {
+    void BaseEffect::draw(int64_t time, GLuint currentTexture, int w, int h, int i) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         glUseProgram(program);
@@ -100,6 +100,10 @@ namespace nx_effect {
                         GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);//设置S轴拉伸方式
         glTexParameterf(GL_TEXTURE_2D,
                         GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
+
+    }
+
+    BaseEffect::~BaseEffect() {
 
     }
 }

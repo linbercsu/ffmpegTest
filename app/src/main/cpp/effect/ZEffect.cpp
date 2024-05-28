@@ -47,7 +47,19 @@ void main()
 namespace nx_effect {
 
     ZEffect::ZEffect() {
+        mTriangleTextures = new GLfloat [8];
+        mTriangleTextures[0] = 0.0f;
+        mTriangleTextures[1] = 0.0f;
+        mTriangleTextures[2] = 1.0f;
+        mTriangleTextures[3] = 0.0f;
+        mTriangleTextures[4] = 1.0f;
+        mTriangleTextures[5] = 1.0f;
+        mTriangleTextures[6] = 0.0f;
+        mTriangleTextures[7] = 1.0f;
+    }
 
+    ZEffect::~ZEffect() {
+        delete mTriangleTextures;
     }
 
     void ZEffect::init() {
@@ -65,12 +77,12 @@ namespace nx_effect {
         program = nx_effect::createProgram(gVertexShader, gFragmentShader);
     }
 
-    void ZEffect::draw(int64_t time, GLuint currentTexture, int w, int h) {
+    void ZEffect::draw(int64_t time, GLuint currentTexture, int w, int h, int padding) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glClearColor(1.0f, 1.0f, 0.0f, 0.0f);
         glEnable(GL_DEPTH_TEST);
 //        glDepthRangef(1.f, 2.f);
-        doDraw(currentTexture);
+        doDraw(currentTexture, w, h, padding);
     }
 
     void ZEffect::createTexture(int w, int h) {
@@ -81,7 +93,7 @@ namespace nx_effect {
 
     }
 
-    void ZEffect::doDraw(GLuint pTexture) {
+    void ZEffect::doDraw(GLuint pTexture, int w, int h, int padding) {
         glBindTexture(GL_TEXTURE_2D, pTexture);
         glUseProgram(program);
         nx_effect::checkGlError("glUseProgram");
@@ -92,7 +104,19 @@ namespace nx_effect {
         checkGlError("glEnableVertexAttribArray");
 
         glEnableVertexAttribArray(location.texCoordinate);
-        glVertexAttribPointer(location.texCoordinate, 2, GL_FLOAT, false, 0, gTriangleTextures);
+
+        auto realPadding = padding;
+        float p1X = realPadding / (float) w;
+        float p2X = (w - padding) / (float )w;
+
+        mTriangleTextures[0] = p1X;
+        mTriangleTextures[2] = p2X;
+        mTriangleTextures[4] = p2X;
+        mTriangleTextures[6] = p1X;
+
+        glVertexAttribPointer(location.texCoordinate, 2, GL_FLOAT, false, 0, mTriangleTextures);
+
+
 
         glUniform1i(location.texture, 0);
         nx_effect::checkGlError("glUniform1i");

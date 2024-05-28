@@ -933,7 +933,7 @@ namespace hello {
 //            glDrawArrays(GL_TRIANGLE_STRIP, 0, 3);
             checkGlError("glDrawArrays");
              */
-            effect->draw(pts, texture, targetWidth, targetHeight);
+            effect->draw(pts, texture, targetWidth, targetHeight, 0);
         }
 
         void createTexture() {

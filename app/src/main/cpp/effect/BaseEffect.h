@@ -19,9 +19,10 @@ namespace nx_effect {
     class BaseEffect {
     public:
         BaseEffect();
+        virtual ~BaseEffect();
 
         virtual void init();
-        virtual void draw(int64_t time, GLuint currentTexture, int w, int h);
+        virtual void draw(int64_t time, GLuint currentTexture, int w, int h, int i);
 
     private:
         void createTexture();

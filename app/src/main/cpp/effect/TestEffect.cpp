@@ -84,7 +84,7 @@ namespace nx_effect {
 
     }
 
-    void TestEffect::draw(int64_t time, GLuint currentTexture, int w, int h) {
+    void TestEffect::draw(int64_t time, GLuint currentTexture, int w, int h, int i) {
         if (lastCreateTime == 0 || time - lastCreateTime > 1000L) {
             lastCreateTime = time;
             if (!textureArray1[0]) {
