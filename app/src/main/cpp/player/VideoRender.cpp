@@ -103,7 +103,7 @@ namespace next {
     }
 
     AVFrame *convert(AVFrame *pFrame) {
-        next_log("convert w:%d h:%d, %d", pFrame->width, pFrame->height, __LINE__);
+//        next_log("convert w:%d h:%d, %d", pFrame->width, pFrame->height, __LINE__);
         auto newWidth = getCorrectWidth(pFrame);
         auto videoFrameConvertRGBA = alloc_picture(AV_PIX_FMT_RGBA, newWidth,
                                                    pFrame->height);

@@ -64,46 +64,66 @@ namespace next {
         ret = avformat_find_stream_info(fmt_ctx, nullptr);
         next_log("avformat_find_stream_info ret %d, %d", ret, __LINE__);
 
+        ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        next_log("av_find_best_stream video ret %d, %d", ret, __LINE__);
+
+        int mediaDuration = 0;
+        auto video_stream_index = ret;
+        AVStream* video_stream = nullptr;
+        AVStream* audio_stream = nullptr;
+        if (video_stream_index >= 0) {
+            video_stream = fmt_ctx->streams[video_stream_index];
+            mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar,
+                                                    video_stream->time_base);
+
+
+            mediaDuration = av_rescale_q(video_stream->duration,
+                                              video_stream->time_base,
+                                              AV_TIME_BASE_Q);
+        }
+
+
         ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
-        next_log("av_find_best_stream ret %d, %d", ret, __LINE__);
+        next_log("av_find_best_stream audio ret %d, %d", ret, __LINE__);
 
         auto audio_stream_index = ret;
-        auto audio_stream = fmt_ctx->streams[audio_stream_index];
-        mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base);
+        if (audio_stream_index >= 0) {
+            audio_stream = fmt_ctx->streams[audio_stream_index];
+            mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base);
 
 
-        ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-        next_log("av_find_best_stream ret %d, %d", ret, __LINE__);
+            mediaDuration = av_rescale_q(audio_stream->duration,
+                                              audio_stream->time_base,
+                                              AV_TIME_BASE_Q);
+        }
 
-        auto video_stream_index = ret;
-        auto video_stream = fmt_ctx->streams[video_stream_index];
 
-        mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar, video_stream->time_base);
 
-        auto audioDuration = av_rescale_q(audio_stream->duration,
-                                     audio_stream->time_base,
-                                     AV_TIME_BASE_Q);
-
-        mReaderCallback->onDurationKnown(audioDuration);
+        mReaderCallback->onDurationKnown(mediaDuration);
         AVPacket * pkt = nullptr;
         auto pktCount = 0;
         while (!isStopped()) {
             int64_t seek = getSeekPosition();
             if (seek != -1) {
-//                int64_t start = av_rescale_q(seek,
-//                                                  AV_TIME_BASE_Q,
-//                                                  audio_stream->time_base);
-//                ret = av_seek_frame(fmt_ctx, audio_stream_index, start, AVSEEK_FLAG_BACKWARD);
-//                if (ret != 0) {
-//                    throw std::bad_cast();
-//                }
 
-                int64_t start = av_rescale_q(seek,
+                if (video_stream != nullptr) {
+                    int64_t start = av_rescale_q(seek,
+                                                 AV_TIME_BASE_Q,
+                                                 video_stream->time_base);
+
+                    ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
+                    if (ret != 0) {
+                        throw std::bad_cast();
+                    }
+                } else if (audio_stream != nullptr) {
+                    int64_t start = av_rescale_q(seek,
                                                   AV_TIME_BASE_Q,
-                                                  video_stream->time_base);
-                ret = av_seek_frame(fmt_ctx, video_stream_index, start, AVSEEK_FLAG_BACKWARD);
-                if (ret != 0) {
-                    throw std::bad_cast();
+                                                  audio_stream->time_base);
+
+                    ret = av_seek_frame(fmt_ctx, audio_stream_index, start, AVSEEK_FLAG_BACKWARD);
+                    if (ret != 0) {
+                        throw std::bad_cast();
+                    }
                 }
 
                 mVideoPktQueueRef->clear();
@@ -132,7 +152,7 @@ namespace next {
             }
 
             pktCount++;
-            if (pkt->stream_index == audio_stream_index) {
+            if (pkt->stream_index == audio_stream_index && audio_stream_index >= 0) {
                 while (!isStopped()) {
                     if (mAudioPktQueueRef->enqueue(pkt)) {
                         pkt = nullptr;
@@ -143,7 +163,7 @@ namespace next {
 
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
-            } else if (pkt->stream_index == video_stream_index) {
+            } else if (pkt->stream_index == video_stream_index && video_stream_index >= 0) {
                 while (!isStopped()) {
                     if (mVideoPktQueueRef->enqueue(pkt)) {
                         pkt = nullptr;
