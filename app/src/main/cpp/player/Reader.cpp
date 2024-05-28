@@ -106,6 +106,8 @@ namespace next {
                     throw std::bad_cast();
                 }
 
+                mVideoPktQueueRef->clear();
+                mAudioPktQueueRef->clear();
                 mVideoPktQueueRef->setNeedClear();
                 mAudioPktQueueRef->setNeedClear();
 

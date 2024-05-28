@@ -99,6 +99,7 @@ namespace next {
             auto ptr = pkt;
             if (ptr != nullptr) {
 //                av_packet_unref(ptr);
+                mSize -= ptr->size;
                 av_packet_free(&ptr);
             }
         }
