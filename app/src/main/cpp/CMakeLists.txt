@@ -33,17 +33,17 @@ elseif( ANDROID_ABI STREQUAL "armeabi-v7a")
     add_compile_options(-fPIC)
 endif()
 
-set(
-        third-libs
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavfilter.a
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavformat.a
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavcodec.a
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavutil.a
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswresample.a
-        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswscale.a
-        ${CMAKE_SOURCE_DIR}/lame-build/${ANDROID_ABI}/libmp3lame.a
-        ${CMAKE_SOURCE_DIR}/x264/install/lib/libx264.a
-)
+#set(
+#        third-libs
+#        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavfilter.a
+#        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavformat.a
+#        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavcodec.a
+#        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavutil.a
+#        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswresample.a
+#        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswscale.a
+#        ${CMAKE_SOURCE_DIR}/lame-build/${ANDROID_ABI}/libmp3lame.a
+#        ${CMAKE_SOURCE_DIR}/x264/install/lib/libx264.a
+#)
 
 
 # Creates and names a library, sets it as either STATIC
@@ -83,6 +83,7 @@ add_library( # Sets the name of the library.
         player/MediaClock.cpp
         player/Exception.cpp
         player/sonic.c
+        player/lodepng.cpp
         AudioConverter.cpp
         concurrent/Thread.cpp
         GLVideo.cpp
@@ -105,6 +106,83 @@ INCLUDE_DIRECTORIES(
         ${CMAKE_SOURCE_DIR}/libyuv/include
 )
 
+add_library( avcodec
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        avcodec
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavcodec.so )
+add_library( avdevice
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        avdevice
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavdevice.so )
+add_library( avformat
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        avformat
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavformat.so )
+add_library( avutil
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        avutil
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavutil.so )
+add_library( swresample
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        swresample
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswresample.so )
+add_library( swscale
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        swscale
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libswscale.so )
+add_library( avfilter
+        SHARED
+        IMPORTED )
+set_target_properties( # Specifies the target library.
+        avfilter
+
+        # Specifies the parameter you want to define.
+        PROPERTIES IMPORTED_LOCATION
+
+        # Provides the path to the library you want to import.
+        ${CMAKE_SOURCE_DIR}/ffmpeg-build/${ANDROID_ABI}/lib/libavfilter.so )
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
 # default, you only need to specify the name of the public NDK library
@@ -134,7 +212,13 @@ endif()
 
 target_link_libraries( # Specifies the target library.
                        native-lib
-                       ${third-libs}
+                        avcodec
+                        avdevice
+                        avformat
+                        avutil
+                        swresample
+                        swscale
+                        avfilter
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib}

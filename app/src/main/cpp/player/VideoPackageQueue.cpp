@@ -85,7 +85,10 @@ namespace next {
 
         auto pkt = mPktList.front();
 
-        assert(pkt != nullptr);
+        if (pkt == nullptr) {
+            throw std::bad_exception();
+        }
+//        assert(pkt != nullptr);
 
         mSize -= pkt->size;
         mPktList.pop_front();

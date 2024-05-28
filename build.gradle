@@ -25,3 +25,7 @@ task clean(type: Delete) {
     delete rootProject.buildDir
     delete rootProject.file('app/.cxx/')
 }
+
+ext {
+    ndkVersion = '25.2.9519653'
+}

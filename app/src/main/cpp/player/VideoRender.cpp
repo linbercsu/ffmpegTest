@@ -15,16 +15,28 @@
 #include "GrayEffect.h"
 #include "MirrorEffect.h"
 #include "Releasable.h"
+
+#include "lodepng.h"
+#include <iostream>
 //#include <android/bitmap.h>
 
 extern "C" {
 #include "libavformat/avformat.h"
+#include "libswscale/swscale.h"
 }
+
+#define SCALE_FLAGS SWS_BICUBIC
 
 namespace next {
     bool lastRender = false;
 
     namespace {
+        void saveImage(const char* filename, const unsigned char
+        *image, unsigned width, unsigned height) {
+            //Encode the image
+            lodepng_encode32_file(filename, image, width, height);
+        }
+
         nx_effect::BaseEffect* createEffect(int effectIndex) {
             nx_effect::BaseEffect *effect;
             if (effectIndex == 1) {
@@ -111,8 +123,21 @@ namespace next {
         videoFrameConvertRGBA->channels = (newWidth - pFrame->width) / 2;
 
         av_frame_make_writable(videoFrameConvertRGBA);
+/*
+        struct SwsContext *sws_ctx = nullptr;
+            sws_ctx = sws_getContext(pFrame->width, pFrame->height,
+                                     (enum AVPixelFormat) pFrame->format,
+                                     pFrame->width, pFrame->height,
+                                     AV_PIX_FMT_RGBA,
+                                     SCALE_FLAGS, nullptr, nullptr, nullptr);
 
+        sws_scale(sws_ctx, pFrame->data,
+                  pFrame->linesize, 0, pFrame->height, videoFrameConvertRGBA->data,
+                  videoFrameConvertRGBA->linesize);
 
+        sws_freeContext(sws_ctx);
+
+*/
         libyuv::I420ToABGR(pFrame->data[0], pFrame->linesize[0],
                            pFrame->data[1], pFrame->linesize[1],
                            pFrame->data[2], pFrame->linesize[2],
@@ -121,6 +146,9 @@ namespace next {
                            pFrame->width,
                            pFrame->height
         );
+
+        //std::string base = "/sdcard/Download/";
+//        saveImage((base + std::to_string(pFrame->pts) + ".png").c_str(), videoFrameConvertRGBA->data[0], videoFrameConvertRGBA->width, videoFrameConvertRGBA->height);
 
 
         if (newWidth != pFrame->width) {//align real image center

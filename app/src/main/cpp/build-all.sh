@@ -49,7 +49,8 @@ function guessAndroidSdk {
 
 ANDROID_SDK=$(guessAndroidSdk)
 
-export NDK=${ANDROID_SDK}/ndk/20.1.5948944
+export NDK=${ANDROID_SDK}/ndk/25.2.9519653
+#export NDK=${ANDROID_SDK}/ndk/20.1.5948944
 export PATH=${PATH}:${NDK}
 
 

@@ -61,8 +61,18 @@ TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
 PREFIX=$(pwd)/ffmpeg-build/${ARCH_DIR}
 
 if [ ! -e ${CROSS_PREFIX}ar ]; then
-  CROSS_PREFIX=${TOOLCHAIN}/bin/llvm-
+  CROSS_PREFIX=${TOOLCHAIN}/llvm-
   fi
+
+CLANG_TARGET=aarch64-none-linux-android21
+
+	CC="$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang -target $CLANG_TARGET"
+	CXX="$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ -target $CLANG_TARGET"
+
+	#EXTRA_CFLAGS+="-target $CLANG_TARGET -gcc-toolchain $TOOLCHAIN"
+	EXTRA_CFLAGS+=" -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function"
+
+OPTFLAGS="-O2 -fpic"
 
 cd ffmpeg
 
@@ -75,11 +85,11 @@ configure() {
     --arch=$ARCH \
     --cpu=$CPU \
     --sysroot=$SYSROOT \
-    --cc=$TOOLCHAIN/${CC} \
-    --cxx=$TOOLCHAIN/${CXX} \
-    --strip=$TOOLCHAIN/${STRIP} \
+    --cc="${CC}" \
+    --cxx="${CXX}" \
     --extra-cflags="$EXTRA_CFLAGS" \
     --extra-ldflags="$ADDI_LDFLAGS" \
+    --optflags="$OPTFLAGS" \
     --disable-doc \
     --disable-ffmpeg \
     --disable-ffplay \
