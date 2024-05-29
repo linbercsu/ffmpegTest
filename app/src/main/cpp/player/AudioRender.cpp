@@ -490,6 +490,8 @@ namespace next {
     }
 
     void AudioRender::release() {
+        mAudioDevice->closeStreamSync();
+
         mAudioDevice->clear();
 
         mFrameQueue.clear();
@@ -554,6 +556,11 @@ namespace next {
         auto speed = mMediaClockRef->getSpeed();
         next_log_tag("audio","speed %d %d", speed,__LINE__);
         while (!isStopped()) {
+            if (isPaused()) {
+                mAudioDevice->closeStreamSync();
+            } else {
+                mAudioDevice->openStream();
+            }
 //            next_log_tag("audio", "render %d", __LINE__);
             if (mFrameQueue.isFull()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -578,10 +585,6 @@ namespace next {
                 continue;
             }
 
-            auto state =AAudioStream_getState(mAudioDevice->stream);
-            if (AAUDIO_STREAM_STATE_STOPPED == state) {
-                auto result = AAudioStream_requestStart(mAudioDevice->stream);
-            }
             //end
             bool end = false;
             if (pkt->stream_index == -1) {
@@ -716,7 +719,7 @@ namespace next {
     }
 
     void AudioRender::stop() {
-        mAudioDevice->closeStreamSync();
+//        mAudioDevice->closeStreamSync();
         mStopped.store(true);
         mThread->join();
     }
@@ -731,7 +734,7 @@ namespace next {
         }
 
         mPaused.store(true);
-        mAudioDevice->closeStreamSync();
+//        mAudioDevice->closeStreamSync();
     }
 
     void AudioRender::start() {
@@ -740,7 +743,7 @@ namespace next {
         }
 
         mPaused.store(false);
-        mAudioDevice->openStream();
+//        mAudioDevice->openStream();
     }
 
     bool AudioRender::isPaused() {
