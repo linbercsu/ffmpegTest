@@ -114,6 +114,16 @@ class MainActivity : AppCompatActivity() {
 //        }
     }
 
+    override fun onPause() {
+        super.onPause()
+        player.pause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        player.start();
+    }
+
     override fun onStop() {
 //        audioConverter.stop()
         super.onStop()

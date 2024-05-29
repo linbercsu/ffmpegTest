@@ -726,11 +726,19 @@ namespace next {
     }
 
     void AudioRender::pause() {
+        if (mPaused.load()) {
+            return;
+        }
+
         mPaused.store(true);
         mAudioDevice->closeStreamSync();
     }
 
     void AudioRender::start() {
+        if (!mPaused.load()) {
+            return;
+        }
+
         mPaused.store(false);
         mAudioDevice->openStream();
     }
