@@ -7,6 +7,7 @@
 #include <atomic>
 #include "LockFrameQueue.h"
 #include "MediaClock.h"
+#include <aaudio/AAudio.h>
 
 extern "C" {
 #include "libavutil/rational.h"
@@ -20,7 +21,6 @@ namespace next {
 
     class VideoPackageQueue;
     class AudioDevice;
-    class AudioOutput;
     class AudioDataContext;
 
     class AudioRender {
@@ -36,18 +36,25 @@ namespace next {
         void start();
         bool isPaused();
         bool isStopped();
+        aaudio_data_callback_result_t audioStream_dataCallback(
+                AAudioStream *stream,
+                void *audioData,
+                int32_t numFrames);
     private:
         void render();
         void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame, int speed);
         void onFrame(AVFrame *frame, AVRational timebase, int speed);
     private:
+        friend class AudioDevice;
+
         MediaClock* mMediaClockRef;
         VideoPackageQueue* mQueueRef;
         AudioDevice* mAudioDevice{nullptr};
         std::thread* mThread{nullptr};
         LockFrameQueue mFrameQueue;
-        AudioOutput* mAudioOutput{nullptr};
+        struct AVFrame* currentFrame{nullptr};
         std::atomic_bool mStopped{false};
+        std::atomic_bool mStreamClosed{false};
         std::atomic_bool mPaused{false};
         AudioDataContext* mDataContext{nullptr};
         struct AVFrame* reusedAudioFrame{nullptr};

@@ -34,9 +34,11 @@ namespace next {
         void seekBackward(int64_t newPosition);
         void seekForward(int64_t newPosition);
         int64_t getSeekPosition();
+        bool hasSeek();
     private:
         void open();
         bool isStopped();
+        void sendEndPkt();
     private:
         ReaderCallback* mReaderCallback{nullptr};
         VideoPackageQueue* mVideoPktQueueRef{nullptr};
@@ -48,6 +50,8 @@ namespace next {
         std::string mPath;
         ReaderContextData* mContextData{nullptr};
         std::atomic_int64_t mSeekPosition{0};
+        bool mHasVideo{false};
+        bool mHasAudio{false};
     };
 }
 

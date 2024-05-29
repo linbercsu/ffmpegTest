@@ -96,8 +96,8 @@ namespace next {
 
     void Player::setSpeed(int speed) {
         mMediaClock.setSpeed(speed);
-        int64_t c = currentPosition();
-        mReader.seekForward(c);
+//        int64_t c = currentPosition();
+//        mReader.seekForward(c);
     }
 
     void Player::updateEffect(int effect) {

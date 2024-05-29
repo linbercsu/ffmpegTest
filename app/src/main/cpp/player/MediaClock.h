@@ -18,6 +18,7 @@ namespace next {
         void calculatePts();
 //        void reset(int64_t start);
         int64_t getPts();
+        void resetPts(int64_t pts);
 
         void setSpeed(int speed);
         int getSpeed();

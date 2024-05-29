@@ -22,6 +22,15 @@ extern "C" {
 #include "libavutil/opt.h"
 }
 
+static aaudio_data_callback_result_t audioStream_dataCallback(
+        AAudioStream *stream,
+        void *userData,
+        void *audioData,
+        int32_t numFrames) {
+    auto render = (next::AudioRender*) userData;
+    return render->audioStream_dataCallback(stream, audioData, numFrames);
+}
+
 namespace next {
     class FrameAutoRelease {
     public:
@@ -81,6 +90,15 @@ namespace next {
             return count * 2 * frame->channels;
         } else if (frame->format == AV_SAMPLE_FMT_FLT) {
             return count * 4 * frame->channels;
+        }
+        throw std::bad_cast();
+    }
+
+    int persampleSizeInByte(AVFrame * frame) {
+        if (frame->format == AV_SAMPLE_FMT_S16) {
+            return  2 * frame->channels;
+        } else if (frame->format == AV_SAMPLE_FMT_FLT) {
+            return 4 * frame->channels;
         }
         throw std::bad_cast();
     }
@@ -192,13 +210,16 @@ namespace next {
 
     class AudioDevice {
     public:
-        AudioDevice(){
+        AudioDevice(AudioRender* render):mRenderRef(render){
 
         }
 
         void clear() {
 //            AAudioStream_requestStop(stream);
-            AAudioStream_close(stream);
+            if (stream != nullptr) {
+                AAudioStream_close(stream);
+                stream = nullptr;
+            }
             if (mSonicStream != nullptr) {
                 sonicDestroyStream(mSonicStream);
                 mSonicStream = nullptr;
@@ -225,12 +246,43 @@ namespace next {
             next_log_tag("Audio", "withSourceCodecParameter %d, %d, %d, %d %d,", mSourceFormat, mSourceChannelCount, mSourceSampleRate, mSourceChannelLayout, __LINE__);
 
         }
+        
+        void closeStreamSync() {
+            if (stream == nullptr)
+                return;
 
-        void open() {
+            std::atomic_bool &closed = mRenderRef->mStreamClosed;
+            if (closed.load()) {
+                return;
+            }
+
+            closed.store(true);
+
+            for (int i = 0; i < 5; i++) {
+                auto state = AAudioStream_getState(stream);
+                if (state == AAUDIO_STREAM_STATE_STOPPED || AAUDIO_STREAM_STATE_CLOSED == state) {
+                    break;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            AAudioStream_close(stream);
+            stream = nullptr;
+        }
+
+        void openStream() {
+            std::atomic_bool &closed = mRenderRef->mStreamClosed;
+            if (!closed.load()) {
+                return;
+            }
+
+            closed.store(false);
+
             AAudioStreamBuilder *builder;
             aaudio_result_t result = AAudio_createStreamBuilder(&builder);
             AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
-
+            AAudioStreamBuilder_setDataCallback(builder, audioStream_dataCallback, mRenderRef);
             next_log_tag("Audio", "open %d %d", result, __LINE__);
 // Setup stream any way you want.
 //            AAudioStreamBuilder_setChannelCount(builder, numChannels);
@@ -246,6 +298,39 @@ namespace next {
 
             int32_t framesPerBurst = AAudioStream_getFramesPerBurst(stream);
             sampleRate = AAudioStream_getSampleRate(stream);
+//            samplesPerFrame = AAudioStream_getSamplesPerFrame(stream);
+//            samplesPerFrame = sampleRate / 50;
+            samplesPerFrame = framesPerBurst;
+            channelCount = AAudioStream_getChannelCount(stream);
+            format = AAudioStream_getFormat(stream);
+
+            result = AAudioStream_requestStart(stream);
+            if (result != AAUDIO_OK){
+                throw std::bad_alloc();
+            }
+        }
+
+        void open() {
+            AAudioStreamBuilder *builder;
+            aaudio_result_t result = AAudio_createStreamBuilder(&builder);
+            AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
+            AAudioStreamBuilder_setDataCallback(builder, audioStream_dataCallback, mRenderRef);
+            next_log_tag("Audio", "open %d %d", result, __LINE__);
+// Setup stream any way you want.
+//            AAudioStreamBuilder_setChannelCount(builder, numChannels);
+//            AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT); // or PCM16
+
+
+            result = AAudioStreamBuilder_openStream(builder, &stream);
+            next_log_tag("Audio", "open %d %d", result, __LINE__);
+            AAudioStreamBuilder_delete(builder);
+            if (result != AAUDIO_OK) {
+                throw std::bad_alloc();
+            }
+
+            int32_t framesPerBurst = AAudioStream_getFramesPerBurst(stream);
+            sampleRate = AAudioStream_getSampleRate(stream);
+            mRenderRef->mFrameQueue.resetMaxSize(sampleRate / 2);
 //            samplesPerFrame = AAudioStream_getSamplesPerFrame(stream);
 //            samplesPerFrame = sampleRate / 50;
             samplesPerFrame = framesPerBurst;
@@ -307,9 +392,9 @@ namespace next {
                     sampleRate, mSourceSampleRate, AV_ROUND_UP);
 //            __android_log_print(6, "AudioConverter", "resample %d, %d, %d, %d, %d, %d", sourceSampleFormat, codecContext->sample_fmt, sourceSample_rate, codecContext->sample_rate, audioFrame->nb_samples, dst_nb_samples);
 
-            auto targetSize = std::max(samplesPerFrame, dst_nb_samples);
+            auto targetSize = dst_nb_samples * 2;
             auto frame = getAudioFrame(targetSize);
-            FrameAutoRelease r(frame);
+//            FrameAutoRelease r(frame);
             ret = av_frame_make_writable(frame);
             if (ret < 0) {
                 throw std::bad_alloc();
@@ -323,76 +408,37 @@ namespace next {
                 throw std::bad_cast();
             }
 
+            frame->pts = oldFrame->pts;
             frame->nb_samples = ret;
+            frame->width = 0;
 
             int speed = pSpeed;
-//            next_log_tag("audio", "convert %d %d %d", mSpeed, speed, __LINE__);
-            if (speed != mSpeed) {
-                mSpeed = speed;
-
-                if (mSonicStream != nullptr) {
-                    sonicDestroyStream(mSonicStream);
-                    mSonicStream = nullptr;
-                }
-            }
-
-
             if (mSonicStream == nullptr) {
                 mSonicStream = sonicCreateStream(sampleRate, channelCount);
-                sonicSetSpeed(mSonicStream, (float)mSpeed);
             }
+            sonicSetSpeed(mSonicStream, (float)speed);
 
+//            auto targetCount = frame->nb_samples * 2;
             if (targetFormat == AV_SAMPLE_FMT_S16) {
                 sonicWriteShortToStream(mSonicStream, (const short *)(frame->data[0]), frame->nb_samples);
+                ret = sonicReadShortFromStream(mSonicStream, (short *) (frame->data[0]),
+                                               targetSize);
+
             } else if (targetFormat == AV_SAMPLE_FMT_FLT) {
                 sonicWriteFloatToStream(mSonicStream, (const float *)(frame->data[0]), frame->nb_samples);
+                ret = sonicReadFloatFromStream(mSonicStream, (float *) (frame->data[0]),
+                                               targetSize);
+            } else {
+                throw std::bad_cast();
             }
 
-            bool send = false;
-            while (true) {
-                if (targetFormat == AV_SAMPLE_FMT_S16) {
-                    ret = sonicReadShortFromStream(mSonicStream, (short *) (frame->data[0]),
-                                                   samplesPerFrame);
-                } else if (targetFormat == AV_SAMPLE_FMT_FLT) {
-                    ret = sonicReadFloatFromStream(mSonicStream, (float *) (frame->data[0]),
-                                                   samplesPerFrame);
-                }
-
-
-                if (ret > 0) {
-                    send = true;
-                    audioFrameBuffer.sendFrame(frame, ret);
-                } else {
-                    break;
-                }
-            }
-
-            if (!send) {
+            if (ret > 0) {
+                frame->nb_samples = ret;
+                queue.pushFrame(frame);
                 return;
-            }
-
-//            av_frame_free(&frame);
-
-            while (true) {
-                if (!audioFrameBuffer.canReceive(samplesPerFrame)) {
-                    break;
-                }
-                auto newFrame = getAudioFrame(samplesPerFrame);
-                audioFrameBuffer.receiveFrame(newFrame, samplesPerFrame);
-
-                int64_t pts = av_rescale_q(samples_count,
-                                           (AVRational) {1, sampleRate},
-                                           AV_TIME_BASE_Q);
-
-                int64_t duration = av_rescale_q(newFrame->nb_samples,
-                                           (AVRational) {1, sampleRate},
-                                           AV_TIME_BASE_Q);
-
-                newFrame->pts = pts * mSpeed + startPts;
-//                newFrame->pkt_duration = duration;
-                samples_count += newFrame->nb_samples;
-
-                queue.pushFrame(newFrame);
+            } else {
+                av_frame_free(&frame);
+                return;
             }
         }
 
@@ -408,8 +454,8 @@ namespace next {
             samples_count = 0;
         }
 
-        friend class AudioOutput;
 
+        AudioRender* mRenderRef;
         AAudioStream *stream;
         int32_t sampleRate;
         int32_t channelCount;
@@ -429,158 +475,18 @@ namespace next {
         int mSpeed{DEFAULT_SPEED};
     };
     
-    class AudioOutput {
-    public:
-        AudioOutput(AudioRender* render, AudioDevice *pDevice, LockFrameQueue *pQueue, MediaClock* clock):mAudioRenderRef(render),
-        mAudioDeviceRef(pDevice),
-                                                                  mFrameQueueRef(pQueue),
-                                                                  mMediaClockRef(clock){
-            mThread = new std::thread(&AudioOutput::run, this);
-        }
-
-        ~AudioOutput() {
-            delete mThread;
-            mThread = nullptr;
-        }
-
-        void stop() {
-            mStopped.store(true);
-            mThread->join();
-        }
-
-        bool isStopped() {
-            return mStopped.load();
-        }
-
-        void onSeek() {
-            mSeekMark.fetch_add(1);
-        }
-
-        void run() {
-//            AVFrame *frame = nullptr;
-            bool resetPts = true;
-            int64_t lastFramePts = 0;
-            int64_t lastFrameDuration = 0;
-            int32_t seekMark = mSeekMark.load();
-            while (!isStopped()) {
-//                next_log_tag("audio", "output %d", __LINE__);
-//                if (frame != nullptr) {
-//                    av_frame_free(&frame);
-//                    frame = nullptr;
-//                }
-
-                if (mAudioRenderRef->isPaused()) {
-                    next_log_tag("audio", "pause %d", __LINE__);
-                    while (true) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                        if (!mAudioRenderRef->isPaused() || isStopped()) {
-                            break;
-                        }
-                    }
-
-                    resetPts = true;
-
-                    if (isStopped()) {
-                        break;
-                    }
-                }
-
-                auto frame = mFrameQueueRef->pop();
-                if (frame == nullptr) {
-//                    next_log_tag("audio", "output waiting frame%d", __LINE__);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } else {
-                    FrameAutoRelease r(frame);
-                    int32_t newSeekMark = mSeekMark.load();
-                    if (seekMark != newSeekMark) {
-                        seekMark = newSeekMark;
-                        resetPts = true;
-                    }
-                    /*
-                    //seek backward
-                    if (lastFramePts > frame->pts) {
-                        resetPts = true;
-                    } else if (std::abs(lastFramePts + lastFrameDuration - frame->pts) > 10000) {//10 millsecond
-                        //seek forward
-                        resetPts = true;
-                    }
-
-                    lastFramePts = frame->pts;
-                    lastFrameDuration = frame->pkt_duration;
-                     */
-                    if (resetPts) {
-                        next_log_tag("audio", "reset pts %ld, %d", frame->pts, __LINE__);
-                        mMediaClockRef->resetStartPts(frame->pts);
-                        resetPts = false;
-                    }
-                    if (!isStopped()) {
-//                        auto now = nowMicro();
-
-                        if (mFirstFrame) {
-                            mFirstFrame = false;
-//                            startTime = now;
-//                            mMediaClockRef->resetStartPts(0, nowMicro());
-//                            next_log_tag("Audio", "output, first pts %ld, %d", frame->pts, __LINE__);
-                        }
-                        //may be write partical
-                        auto written = 0;
-                        while (!isStopped()) {
-                            auto ret = AAudioStream_write(mAudioDeviceRef->stream, frame->data[0] + written, frame->nb_samples - written, 500000000);
-//                            next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
-                            mMediaClockRef->calculatePts();
-                            if (ret < 0) {
-                                next_log_tag("Audio", "AudioOutput, ret = %d %d", ret, __LINE__);
-                                throw std::bad_function_call();
-                                break;
-                            }
-
-                            if (ret == 0) {
-                                next_log_tag("Audio", "AudioOutput, ret = 0 %d", __LINE__);
-                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                            } else {
-
-                                //ret > 0
-                                written += ret;
-                                if (written == frame->nb_samples) {
-                                    break;
-                                }
-
-                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                            }
-//                            mMediaClockRef->calculatePtsWithTime(now);
-                        }
-//                        auto ret = mAudioDeviceRef->write(frame);
-
-
-                    }
-                }
-            }
-        }
-        
-    private:
-        std::atomic_int32_t mSeekMark{0};
-        std::atomic_bool mStopped{false};
-        std::thread* mThread;
-        bool mFirstFrame{true};
-        MediaClock* mMediaClockRef;
-        AudioDevice* mAudioDeviceRef;
-        LockFrameQueue* mFrameQueueRef;
-        AudioRender* mAudioRenderRef;
-    };
 
     AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
-                                                                mFrameQueue(1024 * 1024 * 20), mMediaClockRef(clock) {
-        mAudioDevice = new AudioDevice();
+                                                                mFrameQueue(1024 * 8), mMediaClockRef(clock) {
+        mAudioDevice = new AudioDevice(this);
         mThread = new std::thread(&AudioRender::run, this);
 
-        mAudioOutput = new AudioOutput(this, mAudioDevice, &mFrameQueue, mMediaClockRef);
     }
 
     AudioRender::~AudioRender() {
         next_log_tag("audio", "delete AudioRender %d", __LINE__);
         delete mThread;
         delete mAudioDevice;
-        delete mAudioOutput;
     }
 
     void AudioRender::release() {
@@ -591,6 +497,11 @@ namespace next {
         if (mDataContext != nullptr) {
             delete mDataContext;
             mDataContext = nullptr;
+        }
+
+        if (currentFrame != nullptr) {
+            av_frame_free(&currentFrame);
+            currentFrame = nullptr;
         }
 
         if (reusedAudioFrame != nullptr) {
@@ -644,18 +555,20 @@ namespace next {
         next_log_tag("audio","speed %d %d", speed,__LINE__);
         while (!isStopped()) {
 //            next_log_tag("audio", "render %d", __LINE__);
-
+            if (mFrameQueue.isFull()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
             bool clear = false;
             AVPacket *pkt = mQueueRef->getPkt(&clear);
             if (clear) {
                 mFrameQueue.clear();
                 mAudioDevice->reset();
-                speed = mMediaClockRef->getSpeed();
+//                speed = mMediaClockRef->getSpeed();
 
                 avcodec_flush_buffers(dec_ctx);
                 mDataContext->frameBuffer.clear();
                 resetFirstPts = true;
-                mAudioOutput->onSeek();
             }
 
             if (pkt == nullptr) {
@@ -665,7 +578,19 @@ namespace next {
                 continue;
             }
 
-            if (resetFirstPts) {
+            auto state =AAudioStream_getState(mAudioDevice->stream);
+            if (AAUDIO_STREAM_STATE_STOPPED == state) {
+                auto result = AAudioStream_requestStart(mAudioDevice->stream);
+            }
+            //end
+            bool end = false;
+            if (pkt->stream_index == -1) {
+                end = true;
+                av_packet_free(&pkt);
+                pkt = nullptr;
+            }
+
+            if (resetFirstPts && !end) {
                 resetFirstPts = false;
 
                 int64_t pts = av_rescale_q(pkt->pts,
@@ -677,8 +602,14 @@ namespace next {
 
 //            next_log_tag("audio", "got pkt %d", __LINE__);
 
-            decode(dec_ctx, pkt, reusedAudioFrame, speed);
+            decode(dec_ctx, pkt, reusedAudioFrame, mMediaClockRef->getSpeed());
 
+            //end
+            if (pkt == nullptr) {
+                auto invalidFrame = av_frame_alloc();
+                invalidFrame->nb_samples = 0;
+                mFrameQueue.pushFrame(invalidFrame);
+            }
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
 //            av_packet_unref(pkt);
             av_packet_free(&pkt);
@@ -693,7 +624,7 @@ namespace next {
         ret = avcodec_send_packet(dec, package);
 
 //        __android_log_print(6, "MediaConverter", "on video pkt %ld %d", package->pts, ret);
-        if (ret != AVERROR(EAGAIN) && ret < 0) {
+        if (ret != AVERROR(EAGAIN) && ret < 0 && ret != AVERROR_EOF) {
             throw DecoderException(ret);
         }
 
@@ -727,7 +658,7 @@ namespace next {
             }
         }
 
-        if (ret < 0) {
+        if (ret < 0 && ret != AVERROR_EOF) {
             throw DecoderException(ret);
         }
 
@@ -752,12 +683,13 @@ namespace next {
     }
 
     void AudioRender::onFrame(AVFrame *frame, AVRational timebase, int speed) {
-//        int64_t p = av_frame_get_best_effort_timestamp(frame);
+        int64_t p = av_frame_get_best_effort_timestamp(frame);
 
-//        p = av_rescale_q(p,
-//                         timebase,
-//                         AV_TIME_BASE_Q);
-//
+        p = av_rescale_q(p,
+                         timebase,
+                         AV_TIME_BASE_Q);
+
+        frame->pts = p;
 
         mAudioDevice->convert(frame, mFrameQueue, mDataContext->frameBuffer, speed);
 //        newFrame->pts = p;
@@ -784,7 +716,7 @@ namespace next {
     }
 
     void AudioRender::stop() {
-        mAudioOutput->stop();
+        mAudioDevice->closeStreamSync();
         mStopped.store(true);
         mThread->join();
     }
@@ -795,13 +727,85 @@ namespace next {
 
     void AudioRender::pause() {
         mPaused.store(true);
+        mAudioDevice->closeStreamSync();
     }
 
     void AudioRender::start() {
         mPaused.store(false);
+        mAudioDevice->openStream();
     }
 
     bool AudioRender::isPaused() {
         return mPaused.load();
+    }
+
+    aaudio_data_callback_result_t
+    AudioRender::audioStream_dataCallback(AAudioStream *stream, void *audioData,
+                                          int32_t numFrames) {
+        if (mStreamClosed.load()) {
+            return AAUDIO_CALLBACK_RESULT_STOP;
+        }
+
+        if (currentFrame == nullptr) {
+            currentFrame = mFrameQueue.pop();
+            if (currentFrame != nullptr) {
+                if (currentFrame->nb_samples > 0) {
+                    mMediaClockRef->resetPts(currentFrame->pts);
+                } else {
+                    //end
+                    av_frame_free(&currentFrame);
+                    currentFrame = nullptr;
+                    return AAUDIO_CALLBACK_RESULT_STOP;
+                }
+            }
+        }
+
+        if (currentFrame == nullptr) {
+            return AAUDIO_CALLBACK_RESULT_CONTINUE;
+        }
+
+        auto sampleSize = persampleSizeInByte(currentFrame);
+        auto numBytes = numFrames * sampleSize;
+        auto targetPtr = (char*)audioData;
+        auto targetPosition = 0;
+
+        while (true) {
+            auto position = currentFrame->width;
+            auto remain = currentFrame->nb_samples * sampleSize - position;
+            if (remain == 0) {
+                av_frame_free(&currentFrame);
+                currentFrame = nullptr;
+                currentFrame = mFrameQueue.pop();
+                if (currentFrame == nullptr) {
+                    break;
+                }
+
+                if (currentFrame->nb_samples > 0) {
+                    mMediaClockRef->resetPts(currentFrame->pts);
+                    continue;
+                } else {
+                    //end
+                    av_frame_free(&currentFrame);
+                    currentFrame = nullptr;
+                    return AAUDIO_CALLBACK_RESULT_STOP;
+                }
+            }
+
+            auto canWrite = std::min(remain, numBytes);
+            memcpy(targetPtr + targetPosition, currentFrame->data[0] + position, canWrite);
+            currentFrame->width += canWrite;
+            targetPosition += canWrite;
+            numBytes -= canWrite;
+
+            if (numBytes == 0) {
+                break;
+            }
+
+            if (numBytes < 0) {
+                throw std::bad_exception();
+            }
+        }
+
+        return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
 }

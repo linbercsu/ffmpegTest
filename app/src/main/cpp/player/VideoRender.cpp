@@ -275,6 +275,12 @@ namespace next {
                 continue;
             }
 
+            //end
+            if (pkt->stream_index == -1) {
+                av_packet_free(&pkt);
+                pkt = nullptr;
+            }
+
             decode(dec_ctx, pkt, reusedVideoFrame);
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -392,7 +398,7 @@ namespace next {
         ret = avcodec_send_packet(dec, package);
 
 //        __android_log_print(6, "MediaConverter", "on video pkt %ld %d", package->pts, ret);
-        if (ret != AVERROR(EAGAIN) && ret < 0) {
+        if (ret != AVERROR(EAGAIN) && ret < 0 && ret != AVERROR_EOF) {
             throw DecoderException(ret);
         }
 
@@ -430,7 +436,7 @@ namespace next {
             }
         }
 
-        if (ret < 0) {
+        if (ret < 0 && ret != AVERROR_EOF) {
             throw DecoderException(ret);
         }
 

@@ -24,6 +24,10 @@ namespace next {
         return mPts.load();
     }
 
+    void MediaClock::resetPts(int64_t pts) {
+        mPts.store(pts);
+    }
+
     MediaClock::MediaClock():mStartTime(0) {
 
     }

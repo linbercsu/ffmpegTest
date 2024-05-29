@@ -20,6 +20,7 @@ namespace next {
             return mFrameList.empty();
         }
         void pushFrame(struct AVFrame * frame);
+        void resetMaxSize(int size);
         struct AVFrame * pop();
         struct AVFrame * first();
 

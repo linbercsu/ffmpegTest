@@ -12,6 +12,21 @@ extern "C" {
 namespace next {
 
     namespace {
+        int sampleSize(AVFrame * frame, int count) {
+            if (frame->nb_samples == 0) {
+                return 0;
+            }
+
+            return frame->nb_samples;
+
+//            if (frame->format == AV_SAMPLE_FMT_S16) {
+//                return count * 2 * frame->channels;
+//            } else if (frame->format == AV_SAMPLE_FMT_FLT) {
+//                return count * 4 * frame->channels;
+//            }
+//            throw std::bad_cast();
+        }
+
         int audioFrameSize(AVFrame *frame) {
             return frame->nb_samples;
         }
@@ -41,13 +56,13 @@ namespace next {
         std::lock_guard<std::mutex> l(mLock);
         mFrameList.emplace_back(frame);
 
-        if (frame->format != AV_PIX_FMT_NONE) {
-            auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
-            mCurrentSize += size;
-        } else {
+//        if (frame->format != AV_PIX_FMT_NONE) {
+//            auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
+//            mCurrentSize += size;
+//        } else {
             auto size = audioFrameSize(frame);
             mCurrentSize += size;
-        }
+//        }
 
 
     }
@@ -60,13 +75,13 @@ namespace next {
 
         auto frame = mFrameList.front();
         mFrameList.pop_front();
-        if (frame->format != AV_PIX_FMT_NONE) {
-            auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
-            mCurrentSize -= size;
-        } else {
+//        if (frame->format != AV_PIX_FMT_NONE) {
+//            auto size = avpicture_get_size((enum AVPixelFormat)frame->format, frame->width, frame->height);
+//            mCurrentSize -= size;
+//        } else {
             auto size = audioFrameSize(frame);
             mCurrentSize -= size;
-        }
+//        }
 
         return frame;
     }
@@ -74,5 +89,10 @@ namespace next {
     struct AVFrame * LockFrameQueue::first() {
         std::lock_guard<std::mutex> l(mLock);
         return mFrameList.front();
+    }
+
+    void LockFrameQueue::resetMaxSize(int size) {
+        std::lock_guard<std::mutex> l(mLock);
+        mSize = size;
     }
 }

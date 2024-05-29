@@ -80,6 +80,7 @@ namespace next {
             mediaDuration = av_rescale_q(video_stream->duration,
                                               video_stream->time_base,
                                               AV_TIME_BASE_Q);
+            mHasVideo = true;
         }
 
 
@@ -95,6 +96,8 @@ namespace next {
             mediaDuration = av_rescale_q(audio_stream->duration,
                                               audio_stream->time_base,
                                               AV_TIME_BASE_Q);
+
+            mHasAudio = true;
         }
 
 
@@ -144,6 +147,7 @@ namespace next {
             if (ret < 0) {
                 if (ret == AVERROR_EOF) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    sendEndPkt();
                     continue;
                 } else {
                     next_log("av_read_frame ret %d, %s, %d, %d", ret, av_err2str(ret), pktCount, __LINE__);
@@ -200,6 +204,48 @@ namespace next {
 
     }
 
+    void Reader::sendEndPkt() {
+
+        if (mHasAudio) {
+            auto pkt = av_packet_alloc();
+            pkt->stream_index = -1;
+            while (!isStopped() && !hasSeek()) {
+                if (mAudioPktQueueRef->enqueue(pkt)) {
+                    pkt = nullptr;
+                    break;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            if (pkt != nullptr) {
+                av_packet_free(&pkt);
+            }
+
+            if (isStopped() || hasSeek()) {
+                return;
+            }
+        }
+
+        if (mHasVideo) {
+            auto pkt = av_packet_alloc();
+            pkt->stream_index = -1;
+            while (!isStopped() && !hasSeek()) {
+                if (mVideoPktQueueRef->enqueue(pkt)) {
+                    pkt = nullptr;
+                    break;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            if (pkt != nullptr) {
+                av_packet_free(&pkt);
+            }
+        }
+
+    }
+
     bool Reader::isStopped() {
         return stopped.load();
     }
@@ -224,5 +270,14 @@ namespace next {
             mSeekPosition.store(0);
             return seek & 0x7fffffffffffffff;    
         }
+    }
+
+    bool Reader::hasSeek() {
+        int64_t seek = mSeekPosition.load();
+        if ((seek & 0x8000000000000000L) == 0) {
+            return false;
+        }
+
+        return true;
     }
 }
