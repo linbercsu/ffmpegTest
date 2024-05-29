@@ -591,6 +591,13 @@ namespace next {
                 end = true;
                 av_packet_free(&pkt);
                 pkt = nullptr;
+            } else {
+                if (!mStreamClosed.load()) {
+                    auto state = AAudioStream_getState(mAudioDevice->stream);
+                    if (state == AAUDIO_STREAM_STATE_STOPPED) {
+                        AAudioStream_requestStart(mAudioDevice->stream);
+                    }
+                }
             }
 
             if (resetFirstPts && !end) {
