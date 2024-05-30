@@ -595,17 +595,17 @@ namespace next {
 
         GLfloat textureArray[] = {tx0, ty0, tx1, ty1, tx2, ty2, tx3, ty3};
         if (rotation == 90) {
-            textureArray[0] = tx3;
-            textureArray[1] = ty3;
+            textureArray[0] = tx1;
+            textureArray[1] = ty1;
 
-            textureArray[2] = tx0;
-            textureArray[3] = ty0;
+            textureArray[2] = tx2;
+            textureArray[3] = ty2;
 
-            textureArray[4] = tx1;
-            textureArray[5] = ty1;
+            textureArray[4] = tx3;
+            textureArray[5] = ty3;
 
-            textureArray[6] = tx2;
-            textureArray[7] = ty2;
+            textureArray[6] = tx0;
+            textureArray[7] = ty0;
         } else if (rotation == 180) {
             textureArray[0] = tx2;
             textureArray[1] = ty2;
@@ -619,17 +619,17 @@ namespace next {
             textureArray[6] = tx1;
             textureArray[7] = ty1;
         } else if (rotation == 270) {
-            textureArray[0] = tx1;
-            textureArray[1] = ty1;
+            textureArray[0] = tx3;
+            textureArray[1] = ty3;
 
-            textureArray[2] = tx2;
-            textureArray[3] = ty2;
+            textureArray[2] = tx0;
+            textureArray[3] = ty0;
 
-            textureArray[4] = tx3;
-            textureArray[5] = ty3;
+            textureArray[4] = tx1;
+            textureArray[5] = ty1;
 
-            textureArray[6] = tx0;
-            textureArray[7] = ty0;
+            textureArray[6] = tx2;
+            textureArray[7] = ty2;
         }
         //calculate vertex array
         auto realFrameWith = mCurrentFrame->width - texturePadding * 2;
