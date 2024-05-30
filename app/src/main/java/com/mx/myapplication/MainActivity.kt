@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
         val root = findViewById<FrameLayout>(R.id.gl_root)
         glSurfaceView = GLSurfaceView(root.context)
 
-        glSurfaceView.setEGLContextClientVersion(3)
+        glSurfaceView.setEGLContextClientVersion(2)
 
 
         root.addView(glSurfaceView, -1, -1)

@@ -78,9 +78,9 @@ namespace nx_effect {
     }
 
     void DirectDraw::draw(GLuint currentTexture, GLfloat* vertex, GLfloat* texture) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glClearColor(1.0f, 1.0f, 0.0f, 0.0f);
         glDisable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(1.0f, 1.0f, 0.0f, 0.0f);
 
         glUseProgram(program);
         nx_effect::checkGlError("glUseProgram");

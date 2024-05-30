@@ -553,12 +553,12 @@ namespace next {
                                GL_TEXTURE_2D, target, 0);
         nx_effect::checkGlError("glFramebufferTexture2D");
 
-        unsigned int rbo;
-        glGenRenderbuffers(1, &rbo);
-        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, originalFrameWidth, originalFrameHeight);
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+//        unsigned int rbo;
+//        glGenRenderbuffers(1, &rbo);
+//        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+//        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, originalFrameWidth, originalFrameHeight);
+//        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+//        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
         if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             throw std::bad_exception();
         }
@@ -698,7 +698,7 @@ namespace next {
         glDeleteFramebuffers(1, &fbo);
 
         glDeleteTextures(1, &target);
-        glDeleteRenderbuffers(1, &rbo);
+//        glDeleteRenderbuffers(1, &rbo);
 
         /*
         auto paddingRight = mCurrentFrame->channels;

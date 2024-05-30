@@ -78,9 +78,10 @@ namespace nx_effect {
     }
 
     void ZEffect::draw(int64_t time, GLuint currentTexture, int w, int h, int padding) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(1.0f, 1.0f, 0.0f, 0.0f);
-        glEnable(GL_DEPTH_TEST);
+//        glEnable(GL_DEPTH_TEST);
 //        glDepthRangef(1.f, 2.f);
         doDraw(currentTexture, w, h, padding);
     }

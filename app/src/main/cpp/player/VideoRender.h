@@ -8,7 +8,7 @@
 #include <list>
 #include <mutex>
 #include <atomic>
-#include <GLES3/gl3.h>
+#include <GLES2/gl2.h>
 #include "VideoPackageQueue.h"
 #include "FrameQueue.h"
 #include "MediaClock.h"
