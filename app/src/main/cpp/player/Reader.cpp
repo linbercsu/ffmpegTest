@@ -73,8 +73,22 @@ namespace next {
         AVStream* audio_stream = nullptr;
         if (video_stream_index >= 0) {
             video_stream = fmt_ctx->streams[video_stream_index];
+            AVDictionaryEntry *pEntry = av_dict_get(video_stream->metadata, "rotate", nullptr,
+                                                    AV_DICT_MATCH_CASE);
+            int rotation = 0;
+            if (pEntry != nullptr) {
+                auto rotationString = pEntry->value;
+                if (std::string("90") == rotationString) {
+                    rotation = 90;
+                } else if (std::string("180") == rotationString) {
+                    rotation = 180;
+                } else if (std::string("270") == rotationString) {
+                    rotation = 270;
+                }
+            }
+
             mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar,
-                                                    video_stream->time_base);
+                                                    video_stream->time_base, rotation);
 
 
             mediaDuration = av_rescale_q(video_stream->duration,
@@ -90,7 +104,8 @@ namespace next {
         auto audio_stream_index = ret;
         if (audio_stream_index >= 0) {
             audio_stream = fmt_ctx->streams[audio_stream_index];
-            mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base);
+            mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base,
+                                                    0);
 
 
             mediaDuration = av_rescale_q(audio_stream->duration,

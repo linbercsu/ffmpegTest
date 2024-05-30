@@ -8,11 +8,12 @@
 #include <list>
 #include <mutex>
 #include <atomic>
-#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include "VideoPackageQueue.h"
 #include "FrameQueue.h"
 #include "MediaClock.h"
 #include "BaseEffect.h"
+#include "DirectDraw.h"
 
 struct AVCodecContext;
 struct AVPacket;
@@ -61,9 +62,11 @@ namespace next {
         GLuint textures[1];
         GLuint texture;
         nx_effect::BaseEffect* effect{nullptr};
+        nx_effect::DirectDraw* directDraw{nullptr};
         int mEffectIndex{0};
         int width;
         int height;
+        int mBaseRotation{0};
         struct AVFrame* reusedVideoFrame{nullptr};
         DataContext* mDataContext{nullptr};
     };

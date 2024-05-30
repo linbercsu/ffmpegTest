@@ -20,8 +20,9 @@ namespace next {
     public:
         VideoPackageQueue();
         ~VideoPackageQueue();
-        void onCodecParametersGot(struct AVCodecParameters* parameters, AVRational timebase);
+        void onCodecParametersGot(AVCodecParameters *parameters, AVRational timebase, int i);
         struct AVCodecParameters* getCodecParameters();
+        int getRotation();
         AVRational getTimebase();
         bool enqueue(struct AVPacket* pkt);
         void setNeedClear();
@@ -35,6 +36,7 @@ namespace next {
         bool mEnd{false};
         bool mCodecParametersGot{false};
         AVRational mTimeBase;
+        int mRotation{0};
         struct AVCodecParameters* mCodecParameters{nullptr};
         std::list<struct AVPacket*> mPktList;
         std::mutex mLock;

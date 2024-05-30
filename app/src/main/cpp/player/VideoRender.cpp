@@ -10,6 +10,7 @@
 #include "Log.h"
 #include <exception>
 #include <GLES2/gl2.h>
+#include "GLUtil.h"
 #include "libyuv.h"
 #include "ZEffect.h"
 #include "GrayEffect.h"
@@ -18,6 +19,9 @@
 
 #include "lodepng.h"
 #include <iostream>
+#include <chrono>
+
+
 //#include <android/bitmap.h>
 
 extern "C" {
@@ -25,12 +29,21 @@ extern "C" {
 #include "libswscale/swscale.h"
 }
 
+using namespace std::chrono;
 #define SCALE_FLAGS SWS_BICUBIC
 
 namespace next {
     bool lastRender = false;
 
     namespace {
+        int64_t nowMicro() {
+            microseconds ms = duration_cast< microseconds >(
+                    system_clock::now().time_since_epoch()
+            );
+
+            return ms.count();
+        }
+
         void saveImage(const char* filename, const unsigned char
         *image, unsigned width, unsigned height) {
             //Encode the image
@@ -220,7 +233,7 @@ namespace next {
         int ret = 0;
         AVCodecParameters *codecParameters = nullptr;
         AVRational timeBase;
-
+        int baseRotation = 0;
         while (!isStopped()) {
             codecParameters = mQueueRef->getCodecParameters();
 
@@ -229,7 +242,7 @@ namespace next {
                 continue;
             }
             timeBase = mQueueRef->getTimebase();
-
+            baseRotation = mQueueRef->getRotation();
             break;
         }
 
@@ -237,6 +250,7 @@ namespace next {
             return;
         }
 
+        mBaseRotation = baseRotation;
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
         mDataContext->decoderContext = avcodec_alloc_context3(decoder);
         auto dec_ctx = mDataContext->decoderContext;
@@ -492,10 +506,201 @@ namespace next {
             return;
         }
 
+        auto rotation = mBaseRotation;
+
         if (effect == nullptr) {
             effect = createEffect(mEffectIndex);
+
+            directDraw = new nx_effect::DirectDraw();
+            directDraw->init();
         }
 
+        auto originalFrameWidth = mCurrentFrame->width;
+        auto originalFrameHeight = mCurrentFrame->height;
+
+        GLuint fbo;
+        glGenFramebuffers(1,&fbo);
+        nx_effect::checkGlError("glGenFramebuffers");
+
+        GLint oldFBO;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        nx_effect::checkGlError("glBindFramebuffer");
+
+        GLuint target; //生成纹理id
+        glGenTextures(  //创建纹理对象
+                1, //产生纹理id的数量
+                &target
+        );
+
+        glBindTexture(GL_TEXTURE_2D, target);
+
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_MIN_FILTER, GL_NEAREST);//设置MIN 采样方式
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_MAG_FILTER, GL_LINEAR);//设置MAG采样方式
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);//设置S轴拉伸方式
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, originalFrameWidth, originalFrameHeight, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, target, 0);
+        nx_effect::checkGlError("glFramebufferTexture2D");
+
+        unsigned int rbo;
+        glGenRenderbuffers(1, &rbo);
+        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, originalFrameWidth, originalFrameHeight);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            throw std::bad_exception();
+        }
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mCurrentFrame->width, mCurrentFrame->height, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, mCurrentFrame->data[0]);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glViewport(0, 0, originalFrameWidth, originalFrameHeight);
+        effect->draw(0, texture, mCurrentFrame->width, mCurrentFrame->height, 0);
+
+//        GLubyte* pixels = new GLubyte[originalFrameWidth * originalFrameHeight * 4];
+//        glReadPixels(0,0, originalFrameHeight, originalFrameHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+//        lodepng_encode32_file((std::string("/sdcard/Download/tmp/image-") + std::to_string(nowMicro()) + ".png").c_str(), (const unsigned char *)pixels, originalFrameWidth, originalFrameHeight);
+
+//        delete pixels;
+
+        glBindFramebuffer(GL_FRAMEBUFFER, oldFBO);
+        glViewport(0, 0, width, height);
+
+        auto texturePadding = mCurrentFrame->channels;
+
+        //calculate texture array
+        auto tx0 = texturePadding / (float)(originalFrameWidth);
+        auto ty0 = 0.0f;
+        auto tx1 = (originalFrameWidth - texturePadding) / (float)(originalFrameWidth);
+        auto ty1 = 0.0f;
+        auto tx2 = tx1;
+        auto ty2 = 1.0f;
+        auto tx3 = tx0;
+        auto ty3 = 1.0f;
+
+        GLfloat textureArray[] = {tx0, ty0, tx1, ty1, tx2, ty2, tx3, ty3};
+        if (rotation == 90) {
+            textureArray[0] = tx3;
+            textureArray[1] = ty3;
+
+            textureArray[2] = tx0;
+            textureArray[3] = ty0;
+
+            textureArray[4] = tx1;
+            textureArray[5] = ty1;
+
+            textureArray[6] = tx2;
+            textureArray[7] = ty2;
+        } else if (rotation == 180) {
+            textureArray[0] = tx2;
+            textureArray[1] = ty2;
+
+            textureArray[2] = tx3;
+            textureArray[3] = ty3;
+
+            textureArray[4] = tx0;
+            textureArray[5] = ty0;
+
+            textureArray[6] = tx1;
+            textureArray[7] = ty1;
+        } else if (rotation == 270) {
+            textureArray[0] = tx1;
+            textureArray[1] = ty1;
+
+            textureArray[2] = tx2;
+            textureArray[3] = ty2;
+
+            textureArray[4] = tx3;
+            textureArray[5] = ty3;
+
+            textureArray[6] = tx0;
+            textureArray[7] = ty0;
+        }
+        //calculate vertex array
+        auto realFrameWith = mCurrentFrame->width - texturePadding * 2;
+        auto realFrameHeight = mCurrentFrame->height;
+
+        if (rotation == 90 || rotation == 270) {
+            auto tmp = realFrameWith;
+            realFrameWith = realFrameHeight;
+            realFrameHeight = tmp;
+        }
+
+        auto scaleW = width /(float ) realFrameWith;
+        auto scaleH = height /(float) realFrameHeight;
+        auto scale = std::min(scaleW, scaleH);
+        auto scaleWidth = realFrameWith * scale;
+        auto scaleHeight = realFrameHeight * scale;
+
+        float rate1 = width / (float )scaleWidth;
+        float rate2 = height / (float )scaleHeight;
+
+        if (rate1 > rate2) {
+            auto vx0 = -(scaleWidth) /(float ) width;
+            auto vy0 = -1.0f;
+            auto vx1 = (scaleWidth) /(float ) width;
+            auto vy1 = vy0;
+            auto vx2 = vx1;
+            auto vy2 = 1.0f;
+            auto vx3 = vx0;
+            auto vy3 = vy2;
+
+            GLfloat vertex[] = {vx0, vy0, vx1, vy1, vx2, vy2, vx3, vy3};
+
+            directDraw->draw(target, vertex, textureArray);
+        } else {
+            auto vx0 = -1.f;
+            auto vy0 = -(scaleHeight)/(float )height;
+            auto vx1 = 1.0f;
+            auto vy1 = vy0;
+            auto vx2 = vx1;
+            auto vy2 = (scaleHeight)/(float )height;
+            auto vx3 = vx0;
+            auto vy3 = vy2;
+
+            GLfloat vertex[] = {vx0, vy0, vx1, vy1, vx2, vy2, vx3, vy3};
+
+            directDraw->draw(target, vertex, textureArray);
+        }
+
+
+
+
+        /*
+        //calculate texture array
+        auto texturePadding = mCurrentFrame->channels;
+        auto tx0 = texturePadding / (float)(originalFrameWidth);
+        auto tx1 = (originalFrameWidth - texturePadding) / (float)(originalFrameWidth);
+        auto tx2 = tx1;
+        auto tx3 = tx0;
+
+        //calculate vertex array
+        auto realFrameWith = mCurrentFrame->width - texturePadding * 2;
+        auto realFrameHeight = mCurrentFrame->height;
+
+        */
+
+        glDeleteFramebuffers(1, &fbo);
+
+        glDeleteTextures(1, &target);
+        glDeleteRenderbuffers(1, &rbo);
+
+        /*
         auto paddingRight = mCurrentFrame->channels;
         int frameWidth = mCurrentFrame->width - paddingRight * 2;
         int frameHeight = mCurrentFrame->height;
@@ -510,10 +715,11 @@ namespace next {
         } else {
             int height1 = frameHeight * rate1;
             auto y = (height - height1) / 2;
-            glViewport(0, y, width, height1);
+            glViewport(0, 0, width, height1);
         }
 //        next_log_tag("draw", "%d %d, %d %d", frameWidth, frameHeight, width, height);
 //        glViewport(0, 0, frameWidth * rate, frameHeight*rate);
+//        glViewport(0, 0, width, height);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -523,6 +729,7 @@ namespace next {
 //        glBindTexture(GL_TEXTURE_2D, 0);
 
         effect->draw(0, texture, mCurrentFrame->width, mCurrentFrame->height, paddingRight);
+         */
     }
 
     //gl thread

@@ -11,10 +11,12 @@ extern "C" {
 namespace next {
     auto max_size = 1024 * 1024 * 10;
 
-    void VideoPackageQueue::onCodecParametersGot(struct AVCodecParameters* parameters, AVRational timebase) {
+    void VideoPackageQueue::onCodecParametersGot(AVCodecParameters *parameters, AVRational timebase,
+                                                 int rotation) {
         std::lock_guard<std::mutex> l(mLock);
         mCodecParametersGot = true;
         mTimeBase = timebase;
+        mRotation = rotation;
         avcodec_parameters_copy(mCodecParameters, parameters);
     }
 
@@ -25,6 +27,11 @@ namespace next {
         }
 
         return mCodecParameters;
+    }
+
+    int VideoPackageQueue::getRotation() {
+        std::lock_guard<std::mutex> l(mLock);
+        return mRotation;
     }
 
     bool VideoPackageQueue::enqueue(AVPacket *pkt) {

@@ -3,22 +3,24 @@
 //
 
 #include "GLUtil.h"
-#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <android/log.h>
 #include <malloc.h>
+#include <exception>
 
 #define  LOG_TAG    "GLUtil"
 
 namespace nx_effect {
     static void printGLString(const char *name, GLenum s) {
         const char *v = (const char *) glGetString(s);
-        LOGI("GL %s = %s\n", name, v);
+        LOGE("GL %s = %s\n", name, v);
     }
 
     void checkGlError(const char* op) {
         for (GLint error = glGetError(); error; error
                                                         = glGetError()) {
-            LOGI("after %s() glError (0x%x)\n", op, error);
+            LOGE("after %s() glError (0x%x)\n", op, error);
+            throw std::bad_exception();
         }
     }
 
