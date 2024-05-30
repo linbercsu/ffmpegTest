@@ -34,6 +34,7 @@ namespace next {
         void release();
 
         void updateEffect(int effectIndex);
+        void rotate(int rotation);
 
         void onSurfaceCreated();
 
@@ -66,6 +67,7 @@ namespace next {
         int mEffectIndex{0};
         int width;
         int height;
+        int mRotation{0};
         int mBaseRotation{0};
         struct AVFrame* reusedVideoFrame{nullptr};
         DataContext* mDataContext{nullptr};

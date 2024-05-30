@@ -40,6 +40,8 @@ namespace next {
         void setSpeed(int speed);
         void updateEffect(int effect);
 
+        void rotate(int rotation);
+
     private:
         std::string mPath;
         VideoRender* mVideoRender{nullptr};

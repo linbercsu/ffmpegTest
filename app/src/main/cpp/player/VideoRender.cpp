@@ -506,7 +506,7 @@ namespace next {
             return;
         }
 
-        auto rotation = mBaseRotation;
+        auto rotation = (mBaseRotation + mRotation) % 360;
 
         if (effect == nullptr) {
             effect = createEffect(mEffectIndex);
@@ -749,17 +749,24 @@ namespace next {
     }
 
     void VideoRender::updateEffect(int effectIndex) {
+        std::lock_guard<std::mutex> l(mFrameLock);
+
         if (effectIndex == mEffectIndex) {
             return;
         }
 
         mEffectIndex = effectIndex;
-        std::lock_guard<std::mutex> l(mFrameLock);
+
         if (effect != nullptr) {
             delete effect;
             effect = nullptr;
         }
 
 //        effect = createEffect(effectIndex);
+    }
+
+    void VideoRender::rotate(int rotation) {
+        std::lock_guard<std::mutex> l(mFrameLock);
+        mRotation = rotation;
     }
 }

@@ -94,6 +94,13 @@ void updateEffect(JNIEnv *env,
     player->updateEffect(effect);
 
 }
+void rotate(JNIEnv *env,
+                      jobject  /*thzz*/, jlong ptr, int rotation) {
+    auto *player = reinterpret_cast<next::Player *>(ptr);
+
+    player->rotate(rotation);
+
+}
 
 void pause(JNIEnv *env,
                       jobject  /*thzz*/, jlong ptr) {
@@ -114,6 +121,7 @@ const JNINativeMethod methods[] =
                 {"nativeBackward", "(JJ)V",                                     (void *) backward},
                 {"nativeUpdateSpeed", "(JI)V",                                     (void *) updateSpeed},
                 {"nativeUpdateEffect", "(JI)V",                                     (void *) updateEffect},
+                {"nativeRotate", "(JI)V",                                     (void *) rotate},
                 {"start", "(J)V",                                     (void *) start},
                 {"pause",    "(J)V",                                                      (void *) pause}
         };

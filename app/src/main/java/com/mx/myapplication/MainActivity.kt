@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var audioConverter: AsyncMediaConverter2
     private lateinit var converter: AsyncAudioConverter
     private lateinit var player: TinyPlayer
+    private var rotation = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +82,10 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.gray).setOnClickListener {
             player.updateEffect()
+        }
+        findViewById<View>(R.id.rotate).setOnClickListener {
+            rotation += 90;
+            player.rotate(rotation)
         }
         // Example of a call to a native method
 //        val textView = findViewById<TextView>(R.id.sample_text)

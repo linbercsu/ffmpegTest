@@ -103,4 +103,8 @@ namespace next {
     void Player::updateEffect(int effect) {
         mVideoRender->updateEffect(effect);
     }
+
+    void Player::rotate(int rotation) {
+        mVideoRender->rotate(rotation);
+    }
 }

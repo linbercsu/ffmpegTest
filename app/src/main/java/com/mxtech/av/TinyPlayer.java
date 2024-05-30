@@ -88,6 +88,10 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
         nativeBackward(ref, duration);
     }
 
+    public void rotate(int rotation) {
+        nativeRotate(ref, rotation);
+    }
+
     public void stop() {
 //        nativeStop(ref);
 //        ref = 0;
@@ -117,6 +121,7 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     private native void nativeForward(long ref, long duration);
     private native void nativeUpdateSpeed(long ref, int speed);
     private native void nativeUpdateEffect(long ref, int effect);
+    private native void nativeRotate(long ref, int rotation);
 
     private native void nativeOnSurfaceCreated(long ref);
     private native void nativeOnSurfaceChanged(long ref, int w, int h);
