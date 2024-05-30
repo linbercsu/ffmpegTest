@@ -278,10 +278,14 @@ namespace next {
             }
 
             closed.store(false);
+            openStreamInternal();
+        }
 
+        void openStreamInternal() {
             AAudioStreamBuilder *builder;
             aaudio_result_t result = AAudio_createStreamBuilder(&builder);
             AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
+            AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_I16);
             AAudioStreamBuilder_setDataCallback(builder, audioStream_dataCallback, mRenderRef);
             next_log_tag("Audio", "open %d %d", result, __LINE__);
 // Setup stream any way you want.
@@ -311,36 +315,7 @@ namespace next {
         }
 
         void open() {
-            AAudioStreamBuilder *builder;
-            aaudio_result_t result = AAudio_createStreamBuilder(&builder);
-            AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
-            AAudioStreamBuilder_setDataCallback(builder, audioStream_dataCallback, mRenderRef);
-            next_log_tag("Audio", "open %d %d", result, __LINE__);
-// Setup stream any way you want.
-//            AAudioStreamBuilder_setChannelCount(builder, numChannels);
-//            AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT); // or PCM16
-
-
-            result = AAudioStreamBuilder_openStream(builder, &stream);
-            next_log_tag("Audio", "open %d %d", result, __LINE__);
-            AAudioStreamBuilder_delete(builder);
-            if (result != AAUDIO_OK) {
-                throw std::bad_alloc();
-            }
-
-            int32_t framesPerBurst = AAudioStream_getFramesPerBurst(stream);
-            sampleRate = AAudioStream_getSampleRate(stream);
-            mRenderRef->mFrameQueue.resetMaxSize(sampleRate / 2);
-//            samplesPerFrame = AAudioStream_getSamplesPerFrame(stream);
-//            samplesPerFrame = sampleRate / 50;
-            samplesPerFrame = framesPerBurst;
-            channelCount = AAudioStream_getChannelCount(stream);
-            format = AAudioStream_getFormat(stream);
-
-            result = AAudioStream_requestStart(stream);
-            if (result != AAUDIO_OK){
-                throw std::bad_alloc();
-            }
+            openStreamInternal();
 //            next_log_tag("Audio", "open %d %d", result, __LINE__);
 
             swr_ctx = swr_alloc();
@@ -368,8 +343,8 @@ namespace next {
             if ((ret = (swr_init(swr_ctx))) < 0) {
                 throw std::bad_alloc();
             }
-            next_log_tag("Audio", "frames %d, sampleRate %d, channels %d, format %d, %d",
-                         framesPerBurst, sampleRate, channelCount, format, samplesPerFrame);
+//            next_log_tag("Audio", "frames %d, sampleRate %d, channels %d, format %d, %d",
+//                         framesPerBurst, sampleRate, channelCount, format, samplesPerFrame);
 //            AAudioStream_getSamplesPerFrame(stream);
 
         }
@@ -415,6 +390,7 @@ namespace next {
             int speed = pSpeed;
             if (mSonicStream == nullptr) {
                 mSonicStream = sonicCreateStream(sampleRate, channelCount);
+                sonicSetQuality(mSonicStream, 1);
             }
             sonicSetSpeed(mSonicStream, (float)speed);
 
