@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.View
 import android.widget.TextView
 import com.mxtech.av.AsyncAudioConverter
 import com.mxtech.av.AsyncMediaConverter
@@ -15,12 +16,12 @@ class EntryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_entry)
 
-        var textView = findViewById<TextView>(R.id.convert)
+        var textView = findViewById<View>(R.id.convert)
         textView.setOnClickListener {
             MainActivity.start(this)
         }
 
-        textView = findViewById<TextView>(R.id.open_gl)
+        textView = findViewById<View>(R.id.open_gl)
         textView.setOnClickListener {
             GLActivity.start(this)
         }
