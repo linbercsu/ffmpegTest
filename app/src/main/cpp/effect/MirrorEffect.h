@@ -11,9 +11,12 @@
 namespace nx_effect {
 
     class MirrorEffect : public ZEffect {
-
     public:
+        MirrorEffect(int rotation);
+
         void initProgram() override;
+    private:
+        int mRotation{0};
     };
 }
 

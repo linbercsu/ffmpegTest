@@ -50,10 +50,10 @@ namespace next {
             lodepng_encode32_file(filename, image, width, height);
         }
 
-        nx_effect::BaseEffect* createEffect(int effectIndex) {
+        nx_effect::BaseEffect* createEffect(int effectIndex, int rotation) {
             nx_effect::BaseEffect *effect;
             if (effectIndex == 1) {
-                effect = new nx_effect::MirrorEffect();
+                effect = new nx_effect::MirrorEffect(rotation);
             } else if (effectIndex == 2) {
                 effect = new nx_effect::GrayEffect();
             } else {
@@ -509,8 +509,11 @@ namespace next {
         auto rotation = (mBaseRotation + mRotation) % 360;
 
         if (effect == nullptr) {
-            effect = createEffect(mEffectIndex);
+            effect = createEffect(mEffectIndex, rotation);
 
+        }
+
+        if (directDraw == nullptr) {
             directDraw = new nx_effect::DirectDraw();
             directDraw->init();
         }
