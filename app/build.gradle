@@ -7,7 +7,7 @@ android {
     compileSdkVersion 30
     buildToolsVersion "30.0.2"
     ndkVersion rootProject.ext.ndkVersion
-
+    namespace 'com.mx.myapplication'
     defaultConfig {
         applicationId "com.mx.myapplication"
         minSdkVersion 28
@@ -59,7 +59,7 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.10.2"
+            version "3.22.1"
         }
     }
     compileOptions {
