@@ -36,12 +36,15 @@ namespace next {
 
     void Player::stop() {
         mReader.stop();
-        if (mAudioRender != nullptr)
+        if (mAudioRender != nullptr) {
             mAudioRender->stop();
+        }
 
         if (mVideoRender != nullptr) {
             mVideoRender->stop();
         }
+
+        mReader.join();
     }
 
     void Player::seek(int64_t position) {

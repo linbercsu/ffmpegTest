@@ -25,6 +25,7 @@ namespace next {
         int getRotation();
         AVRational getTimebase();
         bool enqueue(struct AVPacket* pkt);
+        bool enqueueEnd(struct AVPacket* pkt);
         void setNeedClear();
         AVPacket *getPkt(bool *pBoolean);
 

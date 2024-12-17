@@ -47,6 +47,11 @@ namespace next {
         return true;
     }
 
+    bool VideoPackageQueue::enqueueEnd(struct AVPacket* pkt) {
+        std::lock_guard<std::mutex> l(mLock);
+        mPktList.emplace_back(pkt);
+    }
+
     AVPacket *VideoPackageQueue::getPkt(bool *cleared) {
         std::lock_guard<std::mutex> l(mLock);
 

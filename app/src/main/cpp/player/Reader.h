@@ -9,6 +9,12 @@
 #include <atomic>
 #include <stdint.h>
 #include "VideoPackageQueue.h"
+#include "concurrent/MessageThread.h"
+
+extern "C" {
+#include "libavformat/avformat.h"
+}
+
 
 namespace next {
     class ReaderContextData;
@@ -19,9 +25,9 @@ namespace next {
         virtual void onDurationKnown(int64_t duration) = 0;
     };
 
-    class Reader {
+    class Reader : public MessageCallback, MessageThreadCallback {
     public:
-        Reader(std::string path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback);
+        Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback);
         ~Reader();
 
         void release();
@@ -30,12 +36,24 @@ namespace next {
         void start();
         void pause();
         void stop();
+        void join();
         void seek();
         void seekBackward(int64_t newPosition);
         void seekForward(int64_t newPosition);
         int64_t getSeekPosition();
         bool hasSeek();
+
+        void handleMessage(const next::Message &message) override;
+        void onThreadEnded() override;
     private:
+        void onMessageOpen();
+        void onMessageSeek(int64_t seek);
+        void onMessageReadPackage();
+        void onMessageSendPackage();
+
+        void sendMessage(int id);
+        void sendMessageDelay(int id, int delayMs);
+
         void open();
         bool isStopped();
         void sendEndPkt();
@@ -46,12 +64,18 @@ namespace next {
         bool paused{true};
         std::atomic_bool stopped{false};
 
-        std::thread* mThread{nullptr};
+//        std::thread* mThread{nullptr};
+        MessageThread mThread;
         std::string mPath;
         ReaderContextData* mContextData{nullptr};
         std::atomic_int64_t mSeekPosition{0};
         bool mHasVideo{false};
         bool mHasAudio{false};
+        int video_stream_index{-1};
+        int audio_stream_index{-1};
+        AVStream* video_stream{nullptr};
+        AVStream* audio_stream{nullptr};
+        AVPacket* packet{nullptr};
     };
 }
 

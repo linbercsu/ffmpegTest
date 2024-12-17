@@ -86,6 +86,7 @@ add_library( # Sets the name of the library.
         player/lodepng.cpp
         AudioConverter.cpp
         concurrent/Thread.cpp
+        concurrent/MessageThread.cpp
         GLVideo.cpp
         effect/BaseEffect.cpp
         effect/GLUtil.cpp
