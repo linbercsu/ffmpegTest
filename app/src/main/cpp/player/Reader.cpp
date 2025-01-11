@@ -21,6 +21,7 @@ namespace next {
         const int MESSAGE_ID_SEEK = MESSAGE_ID_READ_PKG + 1;
 
         const int MESSAGE_ID_SEND_PKG = MESSAGE_ID_SEEK + 1;
+        const int MESSAGE_PRIORITY_SEEK = Message::MESSAGE_PRIORITY_NORMAL + 1;
 
 
 
@@ -173,6 +174,8 @@ namespace next {
     }
 
     void Reader::onMessageSeek(int64_t seek) {
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_SEND_PKG);
+
         int ret = 0;
         if (video_stream != nullptr) {
             int64_t start = av_rescale_q(seek,
@@ -493,15 +496,15 @@ namespace next {
 
     void Reader::seekBackward(int64_t newPosition) {
         next_log("seekBackward %ld, %d", newPosition, __LINE__);
-
-        mThread.messageQueue().pushBack(Message(MESSAGE_ID_SEEK).withData2(newPosition));
+        mThread.messageQueue().pushBack(
+                Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition));
 //        auto seek = newPosition | 0x8000000000000000L;
 //        mSeekPosition.store(seek);
     }
 
     void Reader::seekForward(int64_t newPosition) {
         next_log("seekForward %ld, %d", newPosition, __LINE__);
-        mThread.messageQueue().pushBack(Message(MESSAGE_ID_SEEK).withData2(newPosition));
+        mThread.messageQueue().pushBack(Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition));
 //        auto seek = newPosition | 0x8000000000000000L;
 //        mSeekPosition.store(seek);
     }
