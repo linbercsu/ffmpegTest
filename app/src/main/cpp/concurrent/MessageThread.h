@@ -2,7 +2,7 @@
 // Created by Zhao, Linlin on 17/12/24.
 //
 
-#pragma
+#pragma once
 
 #include <atomic>
 #include <thread>
@@ -12,6 +12,8 @@
 #include <cstdint>
 
 namespace next {
+
+    int64_t currentTimestampMs();
 
     class MessageCallback;
 
@@ -36,6 +38,16 @@ namespace next {
 
         Message& withCallback(MessageCallback* callback) {
             mMessageCallback = callback;
+            return *this;
+        }
+
+        Message& delay(int64_t ms) {
+            auto time = currentTimestampMs() + ms;
+            this->mExecuteTime = time;
+            return *this;
+        }
+        Message& priority(int p) {
+            this->mPriority = p;
             return *this;
         }
 
@@ -97,10 +109,16 @@ namespace next {
         void* getObject2() const {
             return mObject2;
         }
+
+        int64_t executeTime() const {
+            return mExecuteTime;
+        }
+
     private:
         int mId;
         int mPriority;
         MessageCallback* mMessageCallback {nullptr};
+        int64_t mExecuteTime{0};
 
         int mData1{0};
         int64_t mData2{0};
@@ -118,6 +136,7 @@ namespace next {
         //message queue will take the ownership of message.
         void pushBack(Message& message);
 
+        void removeMessageById(int id);
     private:
         std::mutex mLock;
         std::condition_variable mCondition;

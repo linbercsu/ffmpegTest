@@ -36,6 +36,19 @@ namespace next {
     bool lastRender = false;
 
     namespace {
+        const int MESSAGE_ID_RENDER_IDLE = Message::MESSAGE_ID_USER + 1;
+        const int MESSAGE_ID_INIT_RENDER = MESSAGE_ID_RENDER_IDLE + 1;
+        const int MESSAGE_ID_INIT_DECODER = MESSAGE_ID_INIT_RENDER + 1;
+        const int MESSAGE_ID_PROCESS_PACKAGE = MESSAGE_ID_INIT_DECODER + 1;
+        const int MESSAGE_ID_SEEK = MESSAGE_ID_PROCESS_PACKAGE + 1;
+
+        const int MESSAGE_ID_SEND_PKG = MESSAGE_ID_SEEK + 1;
+        const int MESSAGE_PRIORITY_RENDER = Message::MESSAGE_PRIORITY_NORMAL + 1;
+
+
+    }
+
+    namespace {
         int64_t nowMicro() {
             microseconds ms = duration_cast< microseconds >(
                     system_clock::now().time_since_epoch()
@@ -186,6 +199,41 @@ namespace next {
         return videoFrameConvertRGBA;
     }
 
+    /////////////////////////////////
+
+    RenderThread::RenderThread(): mThread(this) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(MESSAGE_ID_INIT_RENDER).withCallback(this));
+    }
+
+    void RenderThread::handleMessage(const next::Message &message) {
+        auto id = message.getId();
+        if (id == MESSAGE_ID_INIT_RENDER) {
+            mThread.messageQueue().pushBack(Message::simpleMessage(MESSAGE_ID_INIT_RENDER).priority(MESSAGE_PRIORITY_RENDER).delay(16).withCallback(this));
+
+            render();
+            mThread.messageQueue().pushBack(Message::simpleMessage(MESSAGE_ID_RENDER_IDLE).withCallback(this));
+        } else if (id == MESSAGE_ID_RENDER_IDLE) {
+            onIdle();
+        }
+    }
+
+    void RenderThread::render() {
+
+    }
+
+    void RenderThread::onIdle() {
+
+    }
+
+    void RenderThread::stop() {
+        mThread.stop();
+    }
+
+    void RenderThread::join() {
+        mThread.join();
+    }
+
+    void RenderThread::onThreadEnded() {}
 
     VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 1024 * 250), mClock(clock) {

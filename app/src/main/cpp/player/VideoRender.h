@@ -14,12 +14,29 @@
 #include "MediaClock.h"
 #include "BaseEffect.h"
 #include "DirectDraw.h"
+#include "concurrent/MessageThread.h"
 
 struct AVCodecContext;
 struct AVPacket;
 struct AVFrame;
 
 namespace next {
+
+
+    class RenderThread : public MessageThreadCallback, MessageCallback {
+    public:
+        RenderThread();
+        void stop();
+        void join();
+
+        void render();
+        void onIdle();
+        void handleMessage(const next::Message &message) override;
+        void onThreadEnded() override;
+
+    private:
+        MessageThread mThread;
+    };
 
     class DataContext;
 

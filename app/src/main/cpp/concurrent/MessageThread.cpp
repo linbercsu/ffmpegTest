@@ -4,8 +4,15 @@
 
 #include <unistd.h>
 #include "MessageThread.h"
+#include <chrono>
 
 namespace next {
+    int64_t currentTimestampMs() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+    }
+
 
     void Message::execute() {
         mMessageCallback->handleMessage(*this);
@@ -13,23 +20,99 @@ namespace next {
 
     Message MessageQueue::next() {
         std::unique_lock<std::mutex> lk(mLock);
-        while (mMessages.empty())
-            mCondition.wait(lk);
+        while (true) {
+            while (mMessages.empty())
+                mCondition.wait(lk);
 
-        Message &message = mMessages.front();
-        mMessages.pop_front();
+            int64_t nextWakeup = 0x7fffffffffffffffL;
+            int64_t current = 0;
+            for (auto begin = mMessages.begin(); begin != mMessages.end(); begin++) {
+                auto executeTime = begin->executeTime();
+                if (executeTime == 0) {
+                    auto message = *begin;
+                    mMessages.erase(begin);
+                    return message;
+                } else {
+                    if (current == 0) {
+                        current = currentTimestampMs();
+                    }
 
-        return message;
+                    if (current >= executeTime) {
+                        auto message = *begin;
+                        mMessages.erase(begin);
+                        return message;
+                    }
+
+                    if (nextWakeup > executeTime) {
+                        nextWakeup = executeTime;
+                    }
+
+                }
+            }
+
+            //todo assert nextWakeup != 0x7fffffffffffffffL;
+
+            auto wait = nextWakeup - current;
+            mCondition.wait_for(lk, std::chrono::milliseconds(wait));
+
+        }
+//        Message &message = mMessages.front();
+//        mMessages.pop_front();
+//
+//        return message;
     }
 
     void MessageQueue::pushBack(Message &&message) {
         std::unique_lock<std::mutex> lk(mLock);
-        mMessages.push_back(message);
+        auto insert = false;
+        for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
+
+            auto nextPriority = begin->getPriority();
+            auto priority = message.getPriority();
+            if (priority <= nextPriority) {
+                mMessages.insert(begin.base(), message);
+                insert = true;
+                break;
+            }
+        }
+
+        if (!insert) {
+            mMessages.push_front(message);
+        }
+//        mMessages.push_back(message);
     }
 
     void MessageQueue::pushBack(Message &message) {
         std::unique_lock<std::mutex> lk(mLock);
-        mMessages.push_back(message);
+
+        auto insert = false;
+        for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
+
+            auto nextPriority = begin->getPriority();
+            auto priority = message.getPriority();
+            if (priority <= nextPriority) {
+                mMessages.insert(begin.base(), message);
+                insert = true;
+                break;
+            }
+        }
+        
+        if (!insert) {
+            mMessages.push_front(message);
+        }
+
+//        mMessages.push_back(message);
+    }
+
+    void MessageQueue::removeMessageById(int id) {
+        std::unique_lock<std::mutex> lk(mLock);
+        for (auto begin = mMessages.begin(); begin != mMessages.end();) {
+            if (begin->getId() == id) {
+                begin = mMessages.erase(begin);
+            } else {
+                begin++;
+            }
+        }
     }
 
 

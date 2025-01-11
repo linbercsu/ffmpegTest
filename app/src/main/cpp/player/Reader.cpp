@@ -103,8 +103,7 @@ namespace next {
     }
 
     void Reader::sendMessageDelay(int id, int delayMs) {
-        //FIXME
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).withCallback(this));
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
 
     void Reader::onMessageOpen() {
