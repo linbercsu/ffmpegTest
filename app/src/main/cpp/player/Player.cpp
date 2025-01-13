@@ -83,6 +83,8 @@ namespace next {
         if (newPosition < 0) {
             newPosition = 0;
         }
+
+        mVideoRender->preSeek();
         mReader.seekBackward(newPosition);
     }
 
@@ -93,6 +95,8 @@ namespace next {
         if (newPosition > allDuration) {
             newPosition = allDuration;
         }
+
+        mVideoRender->preSeek();
 
         mReader.seekForward(newPosition);
     }

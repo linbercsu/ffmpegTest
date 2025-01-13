@@ -40,7 +40,7 @@ namespace next {
 
     class DataContext;
 
-    class VideoRender {
+    class VideoRender : public MessageCallback, MessageThreadCallback{
     public:
         VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
         ~VideoRender();
@@ -53,11 +53,16 @@ namespace next {
         void updateEffect(int effectIndex);
         void rotate(int rotation);
 
+        void preSeek();
+
         void onSurfaceCreated();
 
         void onDrawFrame();
 
         void onSurfaceChanged(int w, int h);
+
+        void handleMessage(const next::Message &message) override;
+        void onThreadEnded() override;
     private:
         void runInternal();
         bool isStopped();
@@ -68,13 +73,24 @@ namespace next {
 
         void setCurrentFrame();
         void releaseAndSetCurrentFrame();
+
+        void onMessageInit();
+        void onMessageProcessPkt();
+        void onMessageResendPkt();
+        void onMessageReceiveFrame();
+        void onMessagePreSeek();
+        void sendMessage(int id);
+        void sendMessage(int id, int priority);
+        void sendMessageDelay(int id, int delayMs);
+
+        void prepareFrame();
     private:
         struct AVFrame* mCurrentFrame{nullptr};
         std::mutex mFrameLock;
         VideoPackageQueue* mQueueRef;
         std::atomic_bool mStopped{false};
 
-        std::thread* mThread{nullptr};
+        MessageThread mThread;
         FrameQueue mFrameQueue;
         MediaClock* mClock;
         GLuint textures[1];
@@ -88,6 +104,7 @@ namespace next {
         int mBaseRotation{0};
         struct AVFrame* reusedVideoFrame{nullptr};
         DataContext* mDataContext{nullptr};
+        int64_t mLastClock{-1};
     };
 }
 

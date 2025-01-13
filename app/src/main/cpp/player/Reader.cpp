@@ -202,6 +202,7 @@ namespace next {
         mVideoPktQueueRef->setNeedClear();
         mAudioPktQueueRef->setNeedClear();
 
+        sendMessage(MESSAGE_ID_READ_PKG);
         next_log("process seek %ld, %d", seek, __LINE__);
     }
     void Reader::onMessageReadPackage() {
@@ -497,14 +498,14 @@ namespace next {
     void Reader::seekBackward(int64_t newPosition) {
         next_log("seekBackward %ld, %d", newPosition, __LINE__);
         mThread.messageQueue().pushBack(
-                Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition));
+                Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition).withCallback(this));
 //        auto seek = newPosition | 0x8000000000000000L;
 //        mSeekPosition.store(seek);
     }
 
     void Reader::seekForward(int64_t newPosition) {
         next_log("seekForward %ld, %d", newPosition, __LINE__);
-        mThread.messageQueue().pushBack(Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition));
+        mThread.messageQueue().pushBack(Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition).withCallback(this));
 //        auto seek = newPosition | 0x8000000000000000L;
 //        mSeekPosition.store(seek);
     }

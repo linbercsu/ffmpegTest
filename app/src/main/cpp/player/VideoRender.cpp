@@ -40,10 +40,12 @@ namespace next {
         const int MESSAGE_ID_INIT_RENDER = MESSAGE_ID_RENDER_IDLE + 1;
         const int MESSAGE_ID_INIT_DECODER = MESSAGE_ID_INIT_RENDER + 1;
         const int MESSAGE_ID_PROCESS_PACKAGE = MESSAGE_ID_INIT_DECODER + 1;
-        const int MESSAGE_ID_SEEK = MESSAGE_ID_PROCESS_PACKAGE + 1;
+        const int MESSAGE_ID_RESEND_PACKAGE = MESSAGE_ID_PROCESS_PACKAGE + 1;
+        const int MESSAGE_ID_RECEIVE_FRAME = MESSAGE_ID_RESEND_PACKAGE + 1;
+        const int MESSAGE_ID_PRE_SEEK = MESSAGE_ID_RECEIVE_FRAME + 1;
 
-        const int MESSAGE_ID_SEND_PKG = MESSAGE_ID_SEEK + 1;
         const int MESSAGE_PRIORITY_RENDER = Message::MESSAGE_PRIORITY_NORMAL + 1;
+        const int MESSAGE_PRIORITY_PRE_SEEK = Message::MESSAGE_PRIORITY_NORMAL + 1;
 
 
     }
@@ -117,6 +119,8 @@ namespace next {
         }
         AVCodecContext* decoderContext{nullptr};
         AVCodec* decoder{nullptr};
+        AVPacket* resendPkt{nullptr};
+        bool seek{false};
     };
 
     static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height) {
@@ -235,16 +239,18 @@ namespace next {
 
     void RenderThread::onThreadEnded() {}
 
-    VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
+    VideoRender::VideoRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mThread(this), mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 1024 * 250), mClock(clock) {
-        mThread = new std::thread(&VideoRender::run, this);
-//        effect = createEffect(mEffectIndex);
+//        mThread = new std::thread(&VideoRender::run, this);
+//        effect = createEffect(mEffectIndex);        sendMessage(MESSAGE_ID_OPEN);
+        sendMessage(MESSAGE_ID_INIT_RENDER);
+
     }
 
     VideoRender::~VideoRender() {
         next_log_tag("video", "delete VideoRender %d", __LINE__);
-        delete mThread;
-        mThread = nullptr;
+//        delete mThread;
+//        mThread = nullptr;
 
         if (effect != nullptr) {
             delete effect;
@@ -269,6 +275,204 @@ namespace next {
 
         glDeleteTextures(1, textures);
     }
+
+    void VideoRender::handleMessage(const next::Message &message) {
+//        next_log("handleMessage %d, %d", message.getId(), __LINE__);
+
+        switch (message.getId()) {
+            case MESSAGE_ID_INIT_RENDER: {
+                onMessageInit();
+                break;
+            }
+
+            case MESSAGE_ID_PROCESS_PACKAGE: {
+                onMessageProcessPkt();
+                break;
+            }
+
+            case MESSAGE_ID_RESEND_PACKAGE: {
+                onMessageResendPkt();
+                break;
+            }
+
+            case MESSAGE_ID_RECEIVE_FRAME: {
+                onMessageReceiveFrame();
+                break;
+            }
+
+            case MESSAGE_ID_PRE_SEEK: {
+                onMessagePreSeek();
+                break;
+            }
+
+            default:{
+                break;
+            }
+        }
+    }
+
+    void VideoRender::onThreadEnded() {
+
+    }
+
+    void VideoRender::onMessageInit() {
+        int ret = 0;
+        mDataContext = new DataContext();
+        AVCodecParameters *codecParameters = nullptr;
+        AVRational timeBase;
+        int baseRotation = 0;
+        codecParameters = mQueueRef->getCodecParameters();
+
+        if (codecParameters == nullptr) {
+            sendMessageDelay(MESSAGE_ID_INIT_RENDER, 100);
+            return;
+        }
+
+        timeBase = mQueueRef->getTimebase();
+        baseRotation = mQueueRef->getRotation();
+
+        mBaseRotation = baseRotation;
+        auto decoder = avcodec_find_decoder(codecParameters->codec_id);
+        mDataContext->decoderContext = avcodec_alloc_context3(decoder);
+        auto dec_ctx = mDataContext->decoderContext;
+
+        next_log_tag("video", "info: codec id %d, source f:%d %d", codecParameters->codec_id, codecParameters->format, __LINE__);
+
+        ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
+
+        dec_ctx->pkt_timebase = timeBase;
+
+        AVDictionary *opts = nullptr;
+        ret = avcodec_open2(dec_ctx, decoder, &opts);
+        mDataContext->decoder = decoder;
+
+        reusedVideoFrame = av_frame_alloc();
+
+        sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+    }
+
+    void VideoRender::onMessageProcessPkt() {
+        bool clear = false;
+        int ret = 0;
+        auto dec = mDataContext->decoderContext;
+        auto videoFrame = reusedVideoFrame;
+        AVPacket *pkt = mQueueRef->getPkt(&clear);
+        if (clear) {
+            mDataContext->seek = false;
+            std::lock_guard<std::mutex> l(mFrameLock);
+            mFrameQueue.clear();
+            avcodec_flush_buffers(dec);
+        } else {
+            if (mDataContext->seek) {
+                av_packet_free(&pkt);
+                return;
+            }
+        }
+
+        if (pkt == nullptr) {
+            if (clear) {
+                sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+            } else {
+                sendMessageDelay(MESSAGE_ID_PROCESS_PACKAGE, 100);
+            }
+            return;
+        }
+
+        //end
+        if (pkt->stream_index == -1) {
+            av_packet_free(&pkt);
+            pkt = nullptr;
+        }
+
+        mDataContext->resendPkt = pkt;
+
+        onMessageResendPkt();
+    }
+
+    void VideoRender::onMessageResendPkt() {
+        int ret = 0;
+        auto dec = mDataContext->decoderContext;
+        auto pkt = mDataContext->resendPkt;
+//        auto videoFrame = reusedVideoFrame;
+
+        ret = avcodec_send_packet(dec, pkt);
+
+        if (ret != AVERROR(EAGAIN) && ret < 0 && ret != AVERROR_EOF) {
+            throw DecoderException(ret);
+        }
+
+        if (ret == AVERROR(EAGAIN)) {
+            mDataContext->resendPkt = pkt;
+            sendMessage(MESSAGE_ID_RESEND_PACKAGE);
+        } else {
+            mDataContext->resendPkt = nullptr;
+            av_packet_free(&pkt);
+            sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+        }
+
+        onMessageReceiveFrame();
+    }
+
+    void VideoRender::onMessageReceiveFrame() {
+        {
+            std::lock_guard<std::mutex> l(mFrameLock);
+            if (mFrameQueue.isFull()) {
+                sendMessage(MESSAGE_ID_RECEIVE_FRAME);
+                return;
+            }
+        }
+
+        int ret = 0;
+        auto dec = mDataContext->decoderContext;
+        auto videoFrame = reusedVideoFrame;
+
+        ret = avcodec_receive_frame(dec, videoFrame);
+
+        if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+            //fixme throw
+        }
+
+        if (ret == AVERROR_EOF) {
+            return;
+        }
+
+        if (ret == AVERROR(EAGAIN)) {
+            return;
+        }
+        sendMessage(MESSAGE_ID_RECEIVE_FRAME);
+
+        onFrame(videoFrame, dec->pkt_timebase);
+
+        av_frame_unref(videoFrame);
+    }
+
+    void VideoRender::onMessagePreSeek() {
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_RECEIVE_FRAME);
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_RESEND_PACKAGE);
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_PROCESS_PACKAGE);
+
+        if (mDataContext->resendPkt != nullptr) {
+            av_packet_free(&mDataContext->resendPkt);
+            mDataContext->resendPkt = nullptr;
+        }
+
+        mDataContext->seek = true;
+        sendMessageDelay(MESSAGE_ID_PROCESS_PACKAGE, 10);
+    }
+
+    void VideoRender::sendMessage(int id) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).withCallback(this));
+    }
+
+    void VideoRender::sendMessage(int id, int priority) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).priority(priority).withCallback(this));
+    }
+
+    void VideoRender::sendMessageDelay(int id, int delayMs) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
+    }
+
+
 
     void VideoRender::run() {
         Releasable<VideoRender> r(this);
@@ -360,11 +564,17 @@ namespace next {
                          timebase,
                          AV_TIME_BASE_Q);
 
+        auto du = av_rescale_q(frame->pkt_duration,
+                         timebase,
+                         AV_TIME_BASE_Q);
+
         auto newFrame = convert(frame);
 
 //        auto cp = av_frame_alloc();
 //        av_frame_copy(cp, frame);
         newFrame->pts = p;
+        newFrame->pkt_duration = du;
+        std::lock_guard<std::mutex> l(mFrameLock);
         mFrameQueue.pushFrame(newFrame);
     }
 
@@ -548,8 +758,57 @@ namespace next {
     }
 
     //gl thread
+    void VideoRender::prepareFrame() {
+
+        auto first = mFrameQueue.first();
+        if (first == nullptr) {
+            return;
+        }
+
+        if (mCurrentFrame == nullptr) {
+            mCurrentFrame = first;
+            mFrameQueue.pop();
+            return;
+        }
+
+
+        auto clockTime = mClock->getPts();
+        auto lastClockBackup = mLastClock;
+
+        auto lastPts = mCurrentFrame->pts;
+
+        //backward
+        if (lastPts > first->pts) {
+            if (std::abs(clockTime - first->pts) > 500000) {
+//                next_log("prepareFrame, waiting %d", __LINE__);
+                //wait pts being updated
+                return;
+            }
+
+            mLastClock = clockTime;
+            av_frame_free(&mCurrentFrame);
+            mCurrentFrame = first;
+            mFrameQueue.pop();
+            return;
+        }
+
+        mLastClock = clockTime;
+        if (first->pts > clockTime) {
+            return;
+        }
+
+        av_frame_free(&mCurrentFrame);
+
+        mCurrentFrame = first;
+        mFrameQueue.pop();
+    }
+
+
+
+    //gl thread
     void VideoRender::onDrawFrame() {
         std::lock_guard<std::mutex> l(mFrameLock);
+        prepareFrame();
         if (mCurrentFrame == nullptr) {
             return;
         }
@@ -792,7 +1051,7 @@ namespace next {
 
     void VideoRender::stop() {
         mStopped.store(true);
-        mThread->join();
+        mThread.join();
     }
 
     bool VideoRender::isStopped() {
@@ -819,5 +1078,9 @@ namespace next {
     void VideoRender::rotate(int rotation) {
         std::lock_guard<std::mutex> l(mFrameLock);
         mRotation = rotation;
+    }
+
+    void VideoRender::preSeek() {
+        sendMessage(MESSAGE_ID_PRE_SEEK, MESSAGE_PRIORITY_PRE_SEEK);
     }
 }

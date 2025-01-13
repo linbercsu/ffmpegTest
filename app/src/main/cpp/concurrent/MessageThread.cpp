@@ -78,6 +78,7 @@ namespace next {
 
         if (!insert) {
             mMessages.push_front(message);
+            mCondition.notify_all();
         }
 //        mMessages.push_back(message);
     }
@@ -99,6 +100,7 @@ namespace next {
         
         if (!insert) {
             mMessages.push_front(message);
+            mCondition.notify_all();
         }
 
 //        mMessages.push_back(message);
