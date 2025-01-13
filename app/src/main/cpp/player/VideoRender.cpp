@@ -365,6 +365,7 @@ namespace next {
         } else {
             if (mDataContext->seek) {
                 av_packet_free(&pkt);
+                sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
                 return;
             }
         }

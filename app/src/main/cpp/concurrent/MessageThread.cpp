@@ -63,47 +63,81 @@ namespace next {
     }
 
     void MessageQueue::pushBack(Message &&message) {
-        std::unique_lock<std::mutex> lk(mLock);
-        auto insert = false;
-        for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
+        {
+            std::unique_lock<std::mutex> lk(mLock);
+            auto insert = false;
+            for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
 
-            auto nextPriority = begin->getPriority();
-            auto priority = message.getPriority();
-            if (priority <= nextPriority) {
-                mMessages.insert(begin.base(), message);
-                insert = true;
-                break;
+                auto nextPriority = begin->getPriority();
+                auto priority = message.getPriority();
+                if (priority <= nextPriority) {
+                    mMessages.insert(begin.base(), message);
+                    insert = true;
+                    break;
+                }
+            }
+
+            if (!insert) {
+                mMessages.push_front(message);
             }
         }
 
-        if (!insert) {
-            mMessages.push_front(message);
-            mCondition.notify_all();
-        }
+        mCondition.notify_one();
 //        mMessages.push_back(message);
     }
 
     void MessageQueue::pushBack(Message &message) {
-        std::unique_lock<std::mutex> lk(mLock);
+        {
+            std::unique_lock<std::mutex> lk(mLock);
 
-        auto insert = false;
-        for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
+            auto insert = false;
+            for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
 
-            auto nextPriority = begin->getPriority();
-            auto priority = message.getPriority();
-            if (priority <= nextPriority) {
-                mMessages.insert(begin.base(), message);
-                insert = true;
-                break;
+                auto nextPriority = begin->getPriority();
+                auto priority = message.getPriority();
+                if (priority <= nextPriority) {
+                    mMessages.insert(begin.base(), message);
+                    insert = true;
+                    break;
+                }
+            }
+
+            if (!insert) {
+                mMessages.push_front(message);
             }
         }
-        
-        if (!insert) {
-            mMessages.push_front(message);
-            mCondition.notify_all();
+
+        mCondition.notify_one();
+//        mMessages.push_back(message);
+    }
+
+    void MessageQueue::pushIfNotExists(const Message& message) {
+        {
+            std::unique_lock<std::mutex> lk(mLock);
+            for (auto & mMessage : mMessages) {
+                if (mMessage.getId() == message.getId()) {
+                    return;
+                }
+            }
+
+            auto insert = false;
+            for (auto begin = mMessages.rbegin(); begin != mMessages.rend(); begin++) {
+
+                auto nextPriority = begin->getPriority();
+                auto priority = message.getPriority();
+                if (priority <= nextPriority) {
+                    mMessages.insert(begin.base(), message);
+                    insert = true;
+                    break;
+                }
+            }
+
+            if (!insert) {
+                mMessages.push_front(message);
+            }
         }
 
-//        mMessages.push_back(message);
+        mCondition.notify_one();
     }
 
     void MessageQueue::removeMessageById(int id) {

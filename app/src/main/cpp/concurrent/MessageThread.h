@@ -136,6 +136,8 @@ namespace next {
         //message queue will take the ownership of message.
         void pushBack(Message& message);
 
+        void pushIfNotExists(const Message& message);
+
         void removeMessageById(int id);
     private:
         std::mutex mLock;
