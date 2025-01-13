@@ -774,26 +774,7 @@ namespace next {
 
 
         auto clockTime = mClock->getPts();
-        auto lastClockBackup = mLastClock;
 
-        auto lastPts = mCurrentFrame->pts;
-
-        //backward
-        if (lastPts > first->pts) {
-            if (std::abs(clockTime - first->pts) > 500000) {
-//                next_log("prepareFrame, waiting %d", __LINE__);
-                //wait pts being updated
-                return;
-            }
-
-            mLastClock = clockTime;
-            av_frame_free(&mCurrentFrame);
-            mCurrentFrame = first;
-            mFrameQueue.pop();
-            return;
-        }
-
-        mLastClock = clockTime;
         if (first->pts > clockTime) {
             return;
         }

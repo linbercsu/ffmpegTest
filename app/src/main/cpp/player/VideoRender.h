@@ -104,7 +104,6 @@ namespace next {
         int mBaseRotation{0};
         struct AVFrame* reusedVideoFrame{nullptr};
         DataContext* mDataContext{nullptr};
-        int64_t mLastClock{-1};
     };
 }
 
