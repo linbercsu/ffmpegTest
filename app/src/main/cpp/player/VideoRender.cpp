@@ -270,8 +270,10 @@ namespace next {
             reusedVideoFrame = nullptr;
         }
 
-        delete mDataContext;
-        mDataContext = nullptr;
+        if (mDataContext != nullptr) {
+            delete mDataContext;
+            mDataContext = nullptr;
+        }
 
         glDeleteTextures(1, textures);
     }
@@ -312,7 +314,7 @@ namespace next {
     }
 
     void VideoRender::onThreadEnded() {
-
+        release();
     }
 
     void VideoRender::onMessageInit() {
