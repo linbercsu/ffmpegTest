@@ -46,6 +46,7 @@ namespace next {
 
         const int MESSAGE_PRIORITY_RENDER = Message::MESSAGE_PRIORITY_NORMAL + 1;
         const int MESSAGE_PRIORITY_PRE_SEEK = Message::MESSAGE_PRIORITY_NORMAL + 1;
+        const int MESSAGE_PRIORITY_INIT = MESSAGE_PRIORITY_PRE_SEEK + 1;
 
 
     }
@@ -243,7 +244,7 @@ namespace next {
                                                                 mFrameQueue(1024 * 1024 * 250), mClock(clock) {
 //        mThread = new std::thread(&VideoRender::run, this);
 //        effect = createEffect(mEffectIndex);        sendMessage(MESSAGE_ID_OPEN);
-        sendMessage(MESSAGE_ID_INIT_RENDER);
+        sendMessage(MESSAGE_ID_INIT_RENDER, MESSAGE_PRIORITY_INIT);
 
     }
 
