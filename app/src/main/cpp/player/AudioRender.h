@@ -8,6 +8,7 @@
 #include "LockFrameQueue.h"
 #include "MediaClock.h"
 #include <aaudio/AAudio.h>
+#include "concurrent/MessageThread.h"
 
 extern "C" {
 #include "libavutil/rational.h"
@@ -23,7 +24,7 @@ namespace next {
     class AudioDevice;
     class AudioDataContext;
 
-    class AudioRender {
+    class AudioRender : public MessageCallback, MessageThreadCallback {
     public:
         AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
         ~AudioRender();
@@ -40,17 +41,38 @@ namespace next {
                 AAudioStream *stream,
                 void *audioData,
                 int32_t numFrames);
+
+        void preSeek();
+
+        void handleMessage(const next::Message &message) override;
+        void onThreadEnded() override;
+
     private:
         void render();
         void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame, int speed);
         void onFrame(AVFrame *frame, AVRational timebase, int speed);
+
+
+        void onMessageInit();
+        void onMessageInitAudioDevice();
+        void onMessageProcessPkt();
+        void onMessageResendPkt();
+        void onMessageReceiveFrame();
+        void onMessagePreSeek();
+        void onMessagePause();
+        void onMessageStart();
+
+        void sendMessage(int id);
+        void sendMessage(int id, int priority);
+        void sendMessageDelay(int id, int delayMs);
+
     private:
         friend class AudioDevice;
 
         MediaClock* mMediaClockRef;
         VideoPackageQueue* mQueueRef;
         AudioDevice* mAudioDevice{nullptr};
-        std::thread* mThread{nullptr};
+        MessageThread mThread;
         LockFrameQueue mFrameQueue;
         struct AVFrame* currentFrame{nullptr};
         std::atomic_bool mStopped{false};

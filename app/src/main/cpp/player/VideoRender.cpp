@@ -320,7 +320,7 @@ namespace next {
 
     void VideoRender::onMessageInit() {
         int ret = 0;
-        mDataContext = new DataContext();
+
         AVCodecParameters *codecParameters = nullptr;
         AVRational timeBase;
         int baseRotation = 0;
@@ -330,6 +330,8 @@ namespace next {
             sendMessageDelay(MESSAGE_ID_INIT_RENDER, 100);
             return;
         }
+
+        mDataContext = new DataContext();
 
         timeBase = mQueueRef->getTimebase();
         baseRotation = mQueueRef->getRotation();

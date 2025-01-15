@@ -32,6 +32,27 @@ static aaudio_data_callback_result_t audioStream_dataCallback(
 }
 
 namespace next {
+    namespace {
+        const int MESSAGE_ID_RENDER_IDLE = Message::MESSAGE_ID_USER + 1;
+        const int MESSAGE_ID_INIT_RENDER = MESSAGE_ID_RENDER_IDLE + 1;
+        const int MESSAGE_ID_INIT_AUDIO_DEVICE = MESSAGE_ID_INIT_RENDER + 1;
+        const int MESSAGE_ID_INIT_DECODER = MESSAGE_ID_INIT_AUDIO_DEVICE + 1;
+        const int MESSAGE_ID_PROCESS_PACKAGE = MESSAGE_ID_INIT_DECODER + 1;
+        const int MESSAGE_ID_RESEND_PACKAGE = MESSAGE_ID_PROCESS_PACKAGE + 1;
+        const int MESSAGE_ID_RECEIVE_FRAME = MESSAGE_ID_RESEND_PACKAGE + 1;
+        const int MESSAGE_ID_PRE_SEEK = MESSAGE_ID_RECEIVE_FRAME + 1;
+        const int MESSAGE_ID_PAUSE = MESSAGE_ID_PRE_SEEK + 1;
+        const int MESSAGE_ID_START = MESSAGE_ID_PAUSE + 1;
+
+        const int MESSAGE_PRIORITY_RENDER = Message::MESSAGE_PRIORITY_NORMAL + 1;
+        const int MESSAGE_PRIORITY_PRE_SEEK = Message::MESSAGE_PRIORITY_NORMAL + 1;
+        const int MESSAGE_PRIORITY_INIT = MESSAGE_PRIORITY_PRE_SEEK + 1;
+
+
+    }
+
+
+
     class FrameAutoRelease {
     public:
         FrameAutoRelease(AVFrame * frame): mRef(frame) {
@@ -205,13 +226,24 @@ namespace next {
 
         AVCodecContext* decoderContext{nullptr};
         AVCodec* decoder{nullptr};
+        AVPacket* resendPkt{nullptr};
         AudioFrameBuffer frameBuffer;
+        AVRational timebase;
+        bool seek{false};
     };
 
     class AudioDevice {
     public:
         AudioDevice(AudioRender* render):mRenderRef(render){
 
+        }
+
+        void pause() {
+            AAudioStream_requestPause(stream);
+        }
+
+        void start() {
+            AAudioStream_requestStart(stream);
         }
 
         void clear() {
@@ -452,16 +484,14 @@ namespace next {
     };
     
 
-    AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mQueueRef(pQueue),
+    AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mThread(this), mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 8), mMediaClockRef(clock) {
         mAudioDevice = new AudioDevice(this);
-        mThread = new std::thread(&AudioRender::run, this);
-
+        sendMessage(MESSAGE_ID_INIT_RENDER, MESSAGE_PRIORITY_INIT);
     }
 
     AudioRender::~AudioRender() {
         next_log_tag("audio", "delete AudioRender %d", __LINE__);
-        delete mThread;
         delete mAudioDevice;
     }
 
@@ -704,7 +734,8 @@ namespace next {
     void AudioRender::stop() {
 //        mAudioDevice->closeStreamSync();
         mStopped.store(true);
-        mThread->join();
+        mThread.stop();
+        mThread.join();
     }
 
     bool AudioRender::isStopped() {
@@ -717,6 +748,7 @@ namespace next {
         }
 
         mPaused.store(true);
+        sendMessage(MESSAGE_ID_PAUSE);
 //        mAudioDevice->closeStreamSync();
     }
 
@@ -726,11 +758,236 @@ namespace next {
         }
 
         mPaused.store(false);
+        sendMessage(MESSAGE_ID_START);
 //        mAudioDevice->openStream();
     }
 
     bool AudioRender::isPaused() {
         return mPaused.load();
+    }
+
+    void AudioRender::preSeek() {
+        sendMessage(MESSAGE_ID_PRE_SEEK, MESSAGE_PRIORITY_PRE_SEEK);
+    }
+
+    void AudioRender::handleMessage(const next::Message &message) {
+        switch (message.getId()) {
+            case MESSAGE_ID_INIT_RENDER: {
+                onMessageInit();
+                break;
+            }
+
+            case MESSAGE_ID_INIT_AUDIO_DEVICE: {
+                onMessageInitAudioDevice();
+                break;
+            }
+
+            case MESSAGE_ID_PROCESS_PACKAGE: {
+                onMessageProcessPkt();
+                break;
+            }
+
+            case MESSAGE_ID_RESEND_PACKAGE: {
+                onMessageResendPkt();
+                break;
+            }
+
+            case MESSAGE_ID_RECEIVE_FRAME: {
+                onMessageReceiveFrame();
+                break;
+            }
+
+            case MESSAGE_ID_PRE_SEEK: {
+                onMessagePreSeek();
+                break;
+            }
+
+            case MESSAGE_ID_PAUSE: {
+                onMessagePause();
+                break;
+            }
+
+            case MESSAGE_ID_START: {
+                onMessageStart();
+                break;
+            }
+
+            default:{
+                break;
+            }
+        }
+    }
+
+    void AudioRender::onMessageInit()  {
+
+        int ret = 0;
+
+        auto codecParameters = mQueueRef->getCodecParameters();
+
+        if (codecParameters == nullptr) {
+            sendMessageDelay(MESSAGE_ID_INIT_RENDER, 100);
+            return;
+        }
+
+        mDataContext = new AudioDataContext();
+        AVRational timeBase = mQueueRef->getTimebase();
+        mDataContext->timebase = timeBase;
+
+//        mAudioDevice->withSourceCodecParameter(codecParameters);
+//        mAudioDevice->open();
+
+        auto decoder = avcodec_find_decoder(codecParameters->codec_id);
+
+        auto dec_ctx = avcodec_alloc_context3(decoder);
+        mDataContext->decoderContext = dec_ctx;
+        ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
+        dec_ctx->pkt_timebase = timeBase;
+
+        AVDictionary *opts = nullptr;
+        ret = avcodec_open2(dec_ctx, decoder, &opts);
+
+        reusedAudioFrame = av_frame_alloc();
+
+        sendMessage(MESSAGE_ID_INIT_AUDIO_DEVICE);
+        sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+    }
+
+    void AudioRender::onMessageInitAudioDevice() {
+        auto codecParameters = mQueueRef->getCodecParameters();
+        mAudioDevice->withSourceCodecParameter(codecParameters);
+        mAudioDevice->open();
+    }
+
+    void AudioRender::onMessageProcessPkt()  {
+        auto dec_ctx = mDataContext->decoderContext;
+        auto timeBase = mDataContext->timebase;
+        bool clear = false;
+        bool resetFirstPts = false;
+        AVPacket *pkt = mQueueRef->getPkt(&clear);
+        if (clear) {
+            mDataContext->seek = false;
+            mFrameQueue.clear();
+            mAudioDevice->reset();
+
+            avcodec_flush_buffers(dec_ctx);
+            mDataContext->frameBuffer.clear();
+            resetFirstPts = true;
+        } else {
+            if (mDataContext->seek) {
+                av_packet_free(&pkt);
+                sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+                return;
+            }
+        }
+
+        if (pkt == nullptr) {
+            if (clear) {
+                sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+            } else {
+                sendMessageDelay(MESSAGE_ID_PROCESS_PACKAGE, 100);
+            }
+            return;
+        }
+
+        //end
+        bool end = false;
+        if (pkt->stream_index == -1) {
+            end = true;
+            av_packet_free(&pkt);
+            pkt = nullptr;
+        }
+
+        if (resetFirstPts && !end) {
+            resetFirstPts = false;
+
+            int64_t pts = av_rescale_q(pkt->pts,
+                                       timeBase,
+                                       AV_TIME_BASE_Q);
+
+            mAudioDevice->setStartPts(pts);
+        }
+
+        mDataContext->resendPkt = pkt;
+
+        onMessageResendPkt();
+    }
+
+    void AudioRender::onMessageResendPkt()  {
+        int ret = 0;
+        auto dec = mDataContext->decoderContext;
+        auto pkt = mDataContext->resendPkt;
+
+        ret = avcodec_send_packet(dec, pkt);
+
+        if (ret != AVERROR(EAGAIN) && ret < 0 && ret != AVERROR_EOF) {
+            throw DecoderException(ret);
+        }
+
+        if (ret == AVERROR(EAGAIN)) {
+            mDataContext->resendPkt = pkt;
+            sendMessage(MESSAGE_ID_RESEND_PACKAGE);
+        } else {
+            mDataContext->resendPkt = nullptr;
+            av_packet_free(&pkt);
+            sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+        }
+
+        onMessageReceiveFrame();
+    }
+    void AudioRender::onMessageReceiveFrame()  {
+        if (mFrameQueue.isFull()) {
+            sendMessageDelay(MESSAGE_ID_RECEIVE_FRAME, 10);
+            return;
+        }
+        int ret = 0;
+        auto dec = mDataContext->decoderContext;
+        auto videoFrame = reusedAudioFrame;
+
+        ret = avcodec_receive_frame(dec, videoFrame);
+
+        if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+            //fixme throw
+        }
+
+        if (ret == AVERROR_EOF) {
+            return;
+        }
+
+        if (ret == AVERROR(EAGAIN)) {
+            return;
+        }
+
+        sendMessage(MESSAGE_ID_RECEIVE_FRAME);
+
+        onFrame(videoFrame, dec->pkt_timebase, mMediaClockRef->getSpeed());
+
+        av_frame_unref(videoFrame);
+
+    }
+    void AudioRender::onMessagePreSeek()  {
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_RECEIVE_FRAME);
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_RESEND_PACKAGE);
+        mThread.messageQueue().removeMessageById(MESSAGE_ID_PROCESS_PACKAGE);
+
+        if (mDataContext->resendPkt != nullptr) {
+            av_packet_free(&mDataContext->resendPkt);
+            mDataContext->resendPkt = nullptr;
+        }
+
+        mDataContext->seek = true;
+        sendMessageDelay(MESSAGE_ID_PROCESS_PACKAGE, 10);
+    }
+
+    void AudioRender::onMessagePause() {
+        mAudioDevice->pause();
+    }
+
+    void AudioRender::onMessageStart() {
+        mAudioDevice->start();
+    }
+
+    void AudioRender::onThreadEnded() {
+        release();
     }
 
     aaudio_data_callback_result_t
@@ -801,5 +1058,18 @@ namespace next {
         }
 
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
+    }
+
+
+    void AudioRender::sendMessage(int id) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).withCallback(this));
+    }
+
+    void AudioRender::sendMessage(int id, int priority) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).priority(priority).withCallback(this));
+    }
+
+    void AudioRender::sendMessageDelay(int id, int delayMs) {
+        mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
 }

@@ -85,6 +85,7 @@ namespace next {
         }
 
         mVideoRender->preSeek();
+        mAudioRender->preSeek();
         mReader.seekBackward(newPosition);
     }
 
@@ -97,7 +98,7 @@ namespace next {
         }
 
         mVideoRender->preSeek();
-
+        mAudioRender->preSeek();
         mReader.seekForward(newPosition);
     }
 
