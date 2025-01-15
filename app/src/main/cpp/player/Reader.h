@@ -27,7 +27,7 @@ namespace next {
 
     class Reader : public MessageCallback, MessageThreadCallback {
     public:
-        Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback);
+        Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, VideoPackageQueue* subqueue, ReaderCallback* callback);
         ~Reader();
 
         void release();
@@ -61,6 +61,7 @@ namespace next {
         ReaderCallback* mReaderCallback{nullptr};
         VideoPackageQueue* mVideoPktQueueRef{nullptr};
         VideoPackageQueue* mAudioPktQueueRef{nullptr};
+        VideoPackageQueue* mSubtitleQueueRef{nullptr};
         bool paused{true};
         std::atomic_bool stopped{false};
 
@@ -71,10 +72,13 @@ namespace next {
         std::atomic_int64_t mSeekPosition{0};
         bool mHasVideo{false};
         bool mHasAudio{false};
+        bool mHasSubtitle{false};
         int video_stream_index{-1};
         int audio_stream_index{-1};
+        int subtitle_stream_index{-1};
         AVStream* video_stream{nullptr};
         AVStream* audio_stream{nullptr};
+        AVStream* subtitle_stream{nullptr};
         AVPacket* packet{nullptr};
     };
 }

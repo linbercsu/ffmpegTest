@@ -41,7 +41,7 @@ namespace next {
     };
 
 
-    Reader::Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, ReaderCallback* callback):mThread(this), mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue), mReaderCallback(callback) {
+    Reader::Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, VideoPackageQueue* subtitleQueue, ReaderCallback* callback):mThread(this), mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue), mSubtitleQueueRef(subtitleQueue), mReaderCallback(callback) {
 //        mThread = new std::thread(&Reader::run, this);
         sendMessage(MESSAGE_ID_OPEN);
     }
@@ -166,7 +166,15 @@ namespace next {
             mHasAudio = true;
         }
 
+        ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_SUBTITLE, -1, -1, nullptr, 0);
+        subtitle_stream_index = ret;
+        if (subtitle_stream_index >= 0) {
+            subtitle_stream = fmt_ctx->streams[subtitle_stream_index];
+            mSubtitleQueueRef->onCodecParametersGot(subtitle_stream->codecpar, subtitle_stream->time_base,
+                                                    0);
 
+            mHasSubtitle = true;
+        }
 
         mReaderCallback->onDurationKnown(mediaDuration);
 
@@ -199,8 +207,10 @@ namespace next {
 
         mVideoPktQueueRef->clear();
         mAudioPktQueueRef->clear();
+        mSubtitleQueueRef->clear();
         mVideoPktQueueRef->setNeedClear();
         mAudioPktQueueRef->setNeedClear();
+        mSubtitleQueueRef->setNeedClear();
 
         sendMessage(MESSAGE_ID_READ_PKG);
         next_log("process seek %ld, %d", seek, __LINE__);
@@ -226,6 +236,11 @@ namespace next {
                     mVideoPktQueueRef->enqueueEnd(pkt);
                 }
 
+                if (mHasSubtitle) {
+                    auto pkt = av_packet_alloc();
+                    mSubtitleQueueRef->enqueueEnd(pkt);
+                }
+
                 return;
             } else {
 //                next_log("av_read_frame ret %d, %s, %d, %d", ret, av_err2str(ret), pktCount, __LINE__);
@@ -235,26 +250,8 @@ namespace next {
             }
         }
 
-        if (packet->stream_index == audio_stream_index && audio_stream_index >= 0) {
+        onMessageSendPackage();
 
-                if (mAudioPktQueueRef->enqueue(packet)) {
-                    packet = nullptr;
-                    sendMessage(MESSAGE_ID_READ_PKG);
-                } else {
-                    sendMessageDelay(MESSAGE_ID_SEND_PKG, 100);
-                }
-
-        } else if (packet->stream_index == video_stream_index && video_stream_index >= 0) {
-                if (mVideoPktQueueRef->enqueue(packet)) {
-                    packet = nullptr;
-                    sendMessage(MESSAGE_ID_READ_PKG);
-                } else {
-                    sendMessageDelay(MESSAGE_ID_SEND_PKG, 100);
-                }
-        } else {
-            av_packet_unref(packet);
-            sendMessage(MESSAGE_ID_READ_PKG);
-        }
     }
     void Reader::onMessageSendPackage() {
         if (packet->stream_index == audio_stream_index && audio_stream_index >= 0) {
@@ -273,7 +270,16 @@ namespace next {
             } else {
                 sendMessageDelay(MESSAGE_ID_SEND_PKG, 100);
             }
-        } else {
+        }  else if (packet->stream_index == subtitle_stream_index && subtitle_stream_index >= 0) {
+            if (mSubtitleQueueRef->enqueue(packet)) {
+                packet = nullptr;
+                sendMessage(MESSAGE_ID_READ_PKG);
+            } else {
+                sendMessageDelay(MESSAGE_ID_SEND_PKG, 100);
+            }
+        }
+
+        else {
             av_packet_unref(packet);
             sendMessage(MESSAGE_ID_READ_PKG);
         }

@@ -13,6 +13,7 @@ namespace next {
 
     class VideoRender;
     class AudioRender;
+    class SubtitleRender;
 
 
     class Player : ReaderCallback {
@@ -46,8 +47,10 @@ namespace next {
         std::string mPath;
         VideoRender* mVideoRender{nullptr};
         AudioRender* mAudioRender{nullptr};
+        SubtitleRender* mSubtitleRender{nullptr};
         VideoPackageQueue mVideoPackageQueue;
         VideoPackageQueue mAudioPackageQueue;
+        VideoPackageQueue mSubtitlePackageQueue;
         Reader mReader;
         MediaClock mMediaClock;
 

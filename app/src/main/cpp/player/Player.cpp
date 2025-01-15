@@ -5,13 +5,15 @@
 #include "Player.h"
 #include "VideoRender.h"
 #include "AudioRender.h"
+#include "SubtitleRender.h"
 #include "Log.h"
 
 namespace next {
 
-    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue, this) {
+    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mSubtitlePackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue, &mSubtitlePackageQueue, this) {
         mVideoRender = new VideoRender(&mVideoPackageQueue, &mMediaClock);
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
+        mSubtitleRender = new SubtitleRender(&mSubtitlePackageQueue, &mMediaClock);
     }
 
     Player::~Player() {
@@ -22,6 +24,10 @@ namespace next {
 
         if (mAudioRender != nullptr) {
             delete mAudioRender;
+        }
+
+        if (mSubtitleRender != nullptr) {
+            delete mSubtitleRender;
         }
 
     }
@@ -42,6 +48,10 @@ namespace next {
 
         if (mVideoRender != nullptr) {
             mVideoRender->stop();
+        }
+
+        if (mSubtitleRender != nullptr) {
+            mSubtitleRender->stop();
         }
 
         mReader.join();
