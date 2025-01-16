@@ -7,6 +7,8 @@
 #include "MediaClock.h"
 #include "concurrent/MessageThread.h"
 
+struct AVPacket;
+
 namespace next {
 
     class VideoPackageQueue;
@@ -25,7 +27,7 @@ namespace next {
     private:
         void onMessageInit();
         void onMessageRender();
-
+        void onMessageRenderDelay();
         void sendMessage(int id);
         void sendMessage(int id, int priority);
         void sendMessageDelay(int id, int delayMs);
@@ -34,7 +36,7 @@ namespace next {
         MediaClock* mMediaClockRef;
         MessageThread mThread;
         DataContext* mDataContext{nullptr};
-
+        struct AVPacket* package{nullptr};
 
     };
 

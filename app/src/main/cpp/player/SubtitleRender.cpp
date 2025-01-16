@@ -18,6 +18,7 @@ namespace next {
     namespace {
         const int MESSAGE_ID_INIT = Message::MESSAGE_ID_USER + 1;
         const int MESSAGE_ID_RENDER = MESSAGE_ID_INIT + 1;
+        const int MESSAGE_ID_RENDER_DELAY = MESSAGE_ID_RENDER + 1;
 
         const int MESSAGE_PRIORITY_INIT = Message::MESSAGE_PRIORITY_NORMAL + 2;
     }
@@ -43,7 +44,7 @@ namespace next {
 
     }
 
-    SubtitleRender::SubtitleRender(next::VideoPackageQueue *pQueue, MediaClock *clock): mQueueRef(pQueue), mMediaClockRef(clock), mThread(this) {
+    SubtitleRender::SubtitleRender(next::VideoPackageQueue *pQueue, MediaClock *clock):mQueueRef(pQueue), mMediaClockRef(clock), mThread(this) {
         sendMessage(MESSAGE_ID_INIT, MESSAGE_PRIORITY_INIT);
     }
 
@@ -55,6 +56,11 @@ namespace next {
             }
             case MESSAGE_ID_RENDER: {
                 onMessageRender();
+                break;
+            }
+
+            case MESSAGE_ID_RENDER_DELAY: {
+                onMessageRenderDelay();
                 break;
             }
             default:
@@ -71,6 +77,7 @@ namespace next {
     }
 
     void SubtitleRender::onMessageInit() {
+//        next_log("SubtitleRender::onMessageInit() %d", __LINE__);
         int ret = 0;
 
         auto codecParameters = mQueueRef->getCodecParameters();
@@ -88,7 +95,7 @@ namespace next {
 //        mAudioDevice->open();
 
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
-
+        next_log("SubtitleRender::onMessageInit() %d %d, %d", codecParameters->codec_id, AV_CODEC_ID_WEBVTT, __LINE__);
         auto dec_ctx = avcodec_alloc_context3(decoder);
         mDataContext->decoderContext = dec_ctx;
         ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
@@ -104,7 +111,6 @@ namespace next {
 
     void SubtitleRender::onMessageRender() {
         bool clear = false;
-        auto clock = mMediaClockRef->getPts();
         auto pkt = mQueueRef->getPkt(&clear);
 
         if (clear) {
@@ -121,18 +127,37 @@ namespace next {
             return;
         }
 
+        package = pkt;
+        onMessageRenderDelay();
 
+    }
+
+    void SubtitleRender::onMessageRenderDelay() {
+        auto clock = mMediaClockRef->getPts();
+        auto pkt = package;
+        package = nullptr;
+        if (pkt == nullptr) {
+            sendMessageDelay(MESSAGE_ID_RENDER, 100);
+            return;
+        }
 
         auto dec = mDataContext->decoderContext;
 
         auto new_pts = av_rescale_q(pkt->pts,
-                                   mDataContext->timebase,
-                                   AV_TIME_BASE_Q);
+                                    mDataContext->timebase,
+                                    AV_TIME_BASE_Q);
 
         auto duration = av_rescale_q(pkt->duration,
-                                   mDataContext->timebase,
-                                   AV_TIME_BASE_Q);
-//        if (new_pts  <= clock && new_pts + duration >= clock)
+                                     mDataContext->timebase,
+                                     AV_TIME_BASE_Q);
+
+        if (new_pts > clock) {
+            package = pkt;
+            sendMessageDelay(MESSAGE_ID_RENDER_DELAY, 100);
+            return;
+        }
+        next_log("onMessageRender %lld, %lld, %lld, %lld %d", clock, pkt->pts, pkt->duration, new_pts, __LINE__);
+        if (new_pts  <= clock && new_pts + duration >= clock)
         {
             int got_sub = 0;
             AVSubtitle subtitle;
@@ -166,5 +191,4 @@ namespace next {
     void SubtitleRender::sendMessageDelay(int id, int delayMs) {
         mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
-
 }

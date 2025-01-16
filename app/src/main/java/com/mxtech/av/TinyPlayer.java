@@ -1,7 +1,10 @@
 package com.mxtech.av;
 
 import android.opengl.GLSurfaceView;
+import android.util.Log;
 import android.view.View;
+
+import androidx.annotation.Keep;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -111,6 +114,14 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     @Override
     public void onDrawFrame(GL10 gl10) {
         nativeOnDrawFrame(ref);
+    }
+
+    /*
+     * called from native
+     */
+    @Keep
+    private void displaySubtitle(String subtitle) {
+        Log.e("test", "displaySubtitle: " + subtitle);
     }
 
     private native long createPlayer(String path);

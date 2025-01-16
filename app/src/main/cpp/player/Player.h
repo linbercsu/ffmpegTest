@@ -52,6 +52,7 @@ namespace next {
         VideoPackageQueue mAudioPackageQueue;
         VideoPackageQueue mSubtitlePackageQueue;
         Reader mReader;
+        Reader* mExternalSubtitleReader;
         MediaClock mMediaClock;
 
         std::atomic_int64_t mDuration{0};

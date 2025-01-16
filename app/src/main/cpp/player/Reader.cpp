@@ -58,8 +58,13 @@ namespace next {
             mContextData = nullptr;
         }
 
-        mVideoPktQueueRef->clear();
-        mAudioPktQueueRef->clear();
+        if (mVideoPktQueueRef != nullptr) {
+            mVideoPktQueueRef->clear();
+        }
+
+        if (mAudioPktQueueRef != nullptr) {
+            mAudioPktQueueRef->clear();
+        }
     }
 
     void Reader::onThreadEnded() {
@@ -111,18 +116,18 @@ namespace next {
         mContextData = new ReaderContextData();
         int ret = 0;
         ret = avformat_open_input(&(mContextData->fmt_ctx), mPath.c_str(), nullptr, nullptr);
-        next_log("avformat_open_input ret %d, %d", ret, __LINE__);
+        next_log("avformat_open_input ret %d, %s, %d", ret, mPath.c_str(), __LINE__);
         auto fmt_ctx = mContextData->fmt_ctx;
 
         ret = avformat_find_stream_info(fmt_ctx, nullptr);
-        next_log("avformat_find_stream_info ret %d, %d", ret, __LINE__);
+        next_log("avformat_find_stream_info ret %d, %s, %d", ret, mPath.c_str(), __LINE__);
 
         ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-        next_log("av_find_best_stream video ret %d, %d", ret, __LINE__);
+        next_log("av_find_best_stream video ret %d, %s, %d", ret, mPath.c_str(), __LINE__);
 
         int mediaDuration = 0;
-        video_stream_index = ret;
-        if (video_stream_index >= 0) {
+        if (mVideoPktQueueRef != nullptr && ret >= 0) {
+            video_stream_index = ret;
             video_stream = fmt_ctx->streams[video_stream_index];
             AVDictionaryEntry *pEntry = av_dict_get(video_stream->metadata, "rotate", nullptr,
                                                     AV_DICT_MATCH_CASE);
@@ -150,10 +155,10 @@ namespace next {
 
 
         ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
-        next_log("av_find_best_stream audio ret %d, %d", ret, __LINE__);
+        next_log("av_find_best_stream audio ret %d, %s, %d", ret, mPath.c_str(), __LINE__);
 
-        audio_stream_index = ret;
-        if (audio_stream_index >= 0) {
+        if (mAudioPktQueueRef != nullptr && ret >= 0) {
+            audio_stream_index = ret;
             audio_stream = fmt_ctx->streams[audio_stream_index];
             mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base,
                                                     0);
@@ -167,8 +172,10 @@ namespace next {
         }
 
         ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_SUBTITLE, -1, -1, nullptr, 0);
-        subtitle_stream_index = ret;
-        if (subtitle_stream_index >= 0) {
+        next_log("av_find_best_stream sub ret %d, %s, %d", ret, mPath.c_str(), __LINE__);
+        if (mSubtitleQueueRef != nullptr && ret >= 0) {
+            subtitle_stream_index = ret;
+
             subtitle_stream = fmt_ctx->streams[subtitle_stream_index];
             mSubtitleQueueRef->onCodecParametersGot(subtitle_stream->codecpar, subtitle_stream->time_base,
                                                     0);
@@ -203,14 +210,31 @@ namespace next {
             if (ret != 0) {
                 throw std::bad_cast();
             }
+        } else if (subtitle_stream != nullptr) {
+            int64_t start = av_rescale_q(seek,
+                                         AV_TIME_BASE_Q,
+                                         subtitle_stream->time_base);
+
+            ret = av_seek_frame(mContextData->fmt_ctx, subtitle_stream_index, start, AVSEEK_FLAG_BACKWARD);
+            if (ret != 0) {
+                throw std::bad_cast();
+            }
         }
 
-        mVideoPktQueueRef->clear();
-        mAudioPktQueueRef->clear();
-        mSubtitleQueueRef->clear();
-        mVideoPktQueueRef->setNeedClear();
-        mAudioPktQueueRef->setNeedClear();
-        mSubtitleQueueRef->setNeedClear();
+        if (mVideoPktQueueRef != nullptr) {
+            mVideoPktQueueRef->clear();
+            mVideoPktQueueRef->setNeedClear();
+        }
+
+        if (mAudioPktQueueRef != nullptr) {
+            mAudioPktQueueRef->clear();
+            mAudioPktQueueRef->setNeedClear();
+        }
+
+        if (mSubtitleQueueRef != nullptr) {
+            mSubtitleQueueRef->clear();
+            mSubtitleQueueRef->setNeedClear();
+        }
 
         sendMessage(MESSAGE_ID_READ_PKG);
         next_log("process seek %ld, %d", seek, __LINE__);

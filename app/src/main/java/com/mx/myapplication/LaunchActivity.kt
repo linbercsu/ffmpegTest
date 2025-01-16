@@ -20,7 +20,7 @@ class LaunchActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        checkPermissions()
+//        checkPermissions()
     }
 
     fun requestPermission() {
@@ -32,19 +32,19 @@ class LaunchActivity : AppCompatActivity() {
         ActivityCompat.requestPermissions(this, permissions, PERMISSION_CODE);
     }
 
+    override fun onResume() {
+        super.onResume()
+
+        checkPermissions()
+    }
+
     fun checkPermissions() {
-        if (PackageManager.PERMISSION_GRANTED != ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            requestPermission();
-            return
+
+        if (AllFileManagerPermissionUtil.isAllFileManagerPermissionGranted()) {
+            EntryActivity.start(this)
+        } else {
+            AllFileManagerPermissionUtil.requestAllFilePermission(this, AllFileManagerPermissionUtil.REQUEST_MANAGE_ALL_FILES_ACCESS_PERMISSION)
         }
-
-
-        if (PackageManager.PERMISSION_GRANTED != ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-            requestPermission();
-            return
-        }
-
-        EntryActivity.start(this)
     }
 
     override fun onRequestPermissionsResult(

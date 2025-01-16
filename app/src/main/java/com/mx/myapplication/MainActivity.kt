@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
         val fileUri = if (contentUri != null) {
             contentUri
         } else {
-            Uri.fromFile(File("/sdcard/Download/joke.mp4"))
+            Uri.fromFile(File("/sdcard/Download/a.skm"))
         }
 
         val path = if (fileUri.scheme == "file") {
@@ -54,6 +54,8 @@ class MainActivity : AppCompatActivity() {
 
 
         root.addView(glSurfaceView, -1, -1)
+
+        val subtitleView = findViewById<TextView>(R.id.subtitle)
 
 //        player = TinyPlayer("/sdcard/Download/joke.mp4")
         player = TinyPlayer(path)

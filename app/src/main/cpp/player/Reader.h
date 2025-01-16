@@ -27,7 +27,7 @@ namespace next {
 
     class Reader : public MessageCallback, MessageThreadCallback {
     public:
-        Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, VideoPackageQueue* subqueue, ReaderCallback* callback);
+        Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, VideoPackageQueue* subtitleQueue, ReaderCallback* callback);
         ~Reader();
 
         void release();

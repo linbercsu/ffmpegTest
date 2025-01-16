@@ -73,4 +73,10 @@
         android:layout_height="wrap_content"
         android:text="VIDEO"/>
 
+    <TextView
+        android:layout_gravity="bottom|center_horizontal"
+        android:id="@+id/subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
 </FrameLayout>

@@ -10,9 +10,13 @@
 
 namespace next {
 
-    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mSubtitlePackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue, &mSubtitlePackageQueue, this) {
+    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mSubtitlePackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue,
+                                                                                                                                nullptr, this) {
         mVideoRender = new VideoRender(&mVideoPackageQueue, &mMediaClock);
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
+
+        auto subtitlePath = std::string("/sdcard/Download/a.srt");
+        mExternalSubtitleReader = new Reader(subtitlePath, nullptr, nullptr, &mSubtitlePackageQueue, this);
         mSubtitleRender = new SubtitleRender(&mSubtitlePackageQueue, &mMediaClock);
     }
 
