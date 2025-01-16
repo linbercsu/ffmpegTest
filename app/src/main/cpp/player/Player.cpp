@@ -16,7 +16,8 @@ namespace next {
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
 
         auto subtitlePath = std::string("/sdcard/Download/a.srt");
-        mExternalSubtitleReader = new Reader(subtitlePath, nullptr, nullptr, &mSubtitlePackageQueue, this);
+        mExternalSubtitleReader = new Reader(subtitlePath, nullptr, nullptr, &mSubtitlePackageQueue,
+                                             nullptr);
         mSubtitleRender = new SubtitleRender(&mSubtitlePackageQueue, &mMediaClock);
     }
 
@@ -107,7 +108,7 @@ namespace next {
         auto allDuration = mDuration.load();
         int64_t c = currentPosition();
         auto newPosition = c + duration;
-        if (newPosition > allDuration) {
+        if (allDuration > 0 && newPosition > allDuration) {
             newPosition = allDuration;
         }
 

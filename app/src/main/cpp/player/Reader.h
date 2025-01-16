@@ -54,7 +54,6 @@ namespace next {
         void sendMessage(int id);
         void sendMessageDelay(int id, int delayMs);
 
-        void open();
         bool isStopped();
         void sendEndPkt();
     private:
