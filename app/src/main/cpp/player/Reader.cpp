@@ -106,11 +106,11 @@ namespace next {
     }
 
     void Reader::sendMessage(int id) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).withCallback(this));
     }
 
     void Reader::sendMessageDelay(int id, int delayMs) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
 
     void Reader::onMessageOpen() {

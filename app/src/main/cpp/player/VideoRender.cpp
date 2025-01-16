@@ -478,15 +478,15 @@ namespace next {
     }
 
     void VideoRender::sendMessage(int id) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).withCallback(this));
     }
 
     void VideoRender::sendMessage(int id, int priority) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).priority(priority).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).priority(priority).withCallback(this));
     }
 
     void VideoRender::sendMessageDelay(int id, int delayMs) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
 
 

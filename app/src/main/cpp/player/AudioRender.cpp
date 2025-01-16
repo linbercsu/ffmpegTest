@@ -1054,14 +1054,14 @@ namespace next {
 
 
     void AudioRender::sendMessage(int id) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).withCallback(this));
     }
 
     void AudioRender::sendMessage(int id, int priority) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).priority(priority).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).priority(priority).withCallback(this));
     }
 
     void AudioRender::sendMessageDelay(int id, int delayMs) {
-        mThread.messageQueue().pushBack(Message::simpleMessage(id).delay(delayMs).withCallback(this));
+        mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
 }
