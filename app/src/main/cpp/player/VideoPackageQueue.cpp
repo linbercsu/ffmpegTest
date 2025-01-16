@@ -4,6 +4,8 @@
 
 #include "VideoPackageQueue.h"
 #include "Log.h"
+#include "define.h"
+
 extern "C" {
 #include "libavformat/avformat.h"
 }
@@ -11,13 +13,27 @@ extern "C" {
 namespace next {
     auto max_size = 1024 * 1024 * 10;
 
-    void VideoPackageQueue::onCodecParametersGot(AVCodecParameters *parameters, AVRational timebase,
+    void VideoPackageQueue::onCodecParametersGot(Reader* reader, AVCodecParameters *parameters, AVRational timebase,
                                                  int rotation) {
         std::lock_guard<std::mutex> l(mLock);
+        currentReader = reader;
         mCodecParametersGot = true;
         mTimeBase = timebase;
         mRotation = rotation;
         avcodec_parameters_copy(mCodecParameters, parameters);
+
+        for (auto pkt : mPktList) {
+            auto ptr = pkt;
+            if (ptr != nullptr) {
+                mSize -= ptr->size;
+                av_packet_free(&ptr);
+            }
+        }
+        mPktList.clear();
+
+        auto pkt = av_packet_alloc();
+        pkt->stream_index = NEXT_INDEX_TRACK_CHANGED;
+        mPktList.emplace_back(pkt);
     }
 
     struct AVCodecParameters* VideoPackageQueue::getCodecParameters() {
@@ -34,8 +50,14 @@ namespace next {
         return mRotation;
     }
 
-    bool VideoPackageQueue::enqueue(AVPacket *pkt) {
+    bool VideoPackageQueue::enqueue(Reader* reader, AVPacket *pkt) {
         std::lock_guard<std::mutex> l(mLock);
+
+        if (reader != currentReader) {
+            av_packet_free(&pkt);
+            return true;
+        }
+
         mEnd = false;
         if (mSize > max_size) {
             return false;
@@ -47,12 +69,57 @@ namespace next {
         return true;
     }
 
-    bool VideoPackageQueue::enqueueEnd(struct AVPacket* pkt) {
+    bool VideoPackageQueue::enqueueEnd(Reader* reader, struct AVPacket* pkt) {
         std::lock_guard<std::mutex> l(mLock);
+        if (reader != currentReader) {
+            av_packet_free(&pkt);
+            return true;
+        }
+
         mPktList.emplace_back(pkt);
         return true;
     }
 
+    int VideoPackageQueue::getTopAction() {
+        if (mPktList.empty()) {
+            return 0;
+        }
+
+
+        auto pkt = mPktList.front();
+
+        if (pkt == nullptr) {
+            throw std::bad_exception();
+        }
+
+        if (pkt->stream_index >= 0) {
+            return 0;
+        }
+
+        return pkt->stream_index;
+    }
+
+    AVPacket *VideoPackageQueue::getPkt(bool *cleared) {
+        std::lock_guard<std::mutex> l(mLock);
+
+        if (mPktList.empty()) {
+            return nullptr;
+        }
+
+        auto pkt = mPktList.front();
+
+        if (pkt == nullptr) {
+            throw std::bad_exception();
+        }
+//        assert(pkt != nullptr);
+
+        mSize -= pkt->size;
+        mPktList.pop_front();
+
+        return pkt;
+    }
+
+    /*
     AVPacket *VideoPackageQueue::getPkt(bool *cleared) {
         std::lock_guard<std::mutex> l(mLock);
 
@@ -108,6 +175,7 @@ namespace next {
 
         return pkt;
     }
+     */
 
     void VideoPackageQueue::clear() {
         std::lock_guard<std::mutex> l(mLock);
@@ -175,6 +243,41 @@ namespace next {
             }
 
         return clear;
+    }
+
+    void VideoPackageQueue::seek(Reader* reader) {
+        std::lock_guard<std::mutex> l(mLock);
+        if (reader != currentReader) {
+            return;
+        }
+
+        AVPacket* initPackage = nullptr;
+
+        for (auto pkt : mPktList) {
+            auto ptr = pkt;
+            if (ptr != nullptr) {
+                mSize -= ptr->size;
+                if (ptr->stream_index == NEXT_INDEX_TRACK_CHANGED) {
+                    initPackage = ptr;
+                } else {
+                    av_packet_free(&ptr);
+                }
+            }
+        }
+        mPktList.clear();
+
+        /*
+         * if the init pkt hasn't been consumed, then there is no necessary to make a seek on renderer.
+         */
+        if (initPackage) {
+            mPktList.emplace_back(initPackage);
+            return;
+        }
+
+        auto pkt = av_packet_alloc();
+        pkt->stream_index = NEXT_INDEX_SEEK;
+
+        mPktList.emplace_back(pkt);
     }
 
     void VideoPackageQueue::setNeedClear() {

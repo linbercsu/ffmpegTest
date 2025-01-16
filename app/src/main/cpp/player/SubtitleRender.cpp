@@ -87,6 +87,11 @@ namespace next {
             return;
         }
 
+        if (mDataContext != nullptr) {
+            delete mDataContext;
+            mDataContext = nullptr;
+        }
+
         mDataContext = new DataContext();
         AVRational timeBase = mQueueRef->getTimebase();
         mDataContext->timebase = timeBase;
@@ -112,24 +117,31 @@ namespace next {
     void SubtitleRender::onMessageRender() {
         bool clear = false;
         auto pkt = mQueueRef->getPkt(&clear);
-
-        if (clear) {
-
+        if (pkt == nullptr) {
+            sendMessageDelay(MESSAGE_ID_RENDER, 100);
+            return;
         }
 
-        if (pkt != nullptr && pkt->stream_index == -1) {
+        if (pkt->stream_index == NEXT_INDEX_TRACK_CHANGED) {
+            av_packet_free(&pkt);
+            sendMessage(MESSAGE_ID_INIT, MESSAGE_PRIORITY_INIT);
+            return;
+        } else if (pkt->stream_index == NEXT_INDEX_END) {
             av_packet_free(&pkt);
             pkt = nullptr;
-        }
-
-        if (pkt == nullptr) {
+            sendMessageDelay(MESSAGE_ID_RENDER, 100);
+            return;
+        } else if (pkt->stream_index == NEXT_INDEX_SEEK) {
+            mDataContext->seek = false;
+            auto dec = mDataContext->decoderContext;
+            avcodec_flush_buffers(dec);
+            av_packet_free(&package);
             sendMessageDelay(MESSAGE_ID_RENDER, 100);
             return;
         }
 
         package = pkt;
         onMessageRenderDelay();
-
     }
 
     void SubtitleRender::onMessageRenderDelay() {

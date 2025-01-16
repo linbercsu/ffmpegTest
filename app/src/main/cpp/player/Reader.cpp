@@ -3,6 +3,7 @@
 //
 
 #include "Reader.h"
+#include "define.h"
 #include "Releasable.h"
 #include <thread>
 #include <chrono>
@@ -143,7 +144,7 @@ namespace next {
                 }
             }
 
-            mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar,
+            mVideoPktQueueRef->onCodecParametersGot(this, video_stream->codecpar,
                                                     video_stream->time_base, rotation);
 
 
@@ -160,7 +161,7 @@ namespace next {
         if (mAudioPktQueueRef != nullptr && ret >= 0) {
             audio_stream_index = ret;
             audio_stream = fmt_ctx->streams[audio_stream_index];
-            mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base,
+            mAudioPktQueueRef->onCodecParametersGot(this, audio_stream->codecpar, audio_stream->time_base,
                                                     0);
 
 
@@ -177,7 +178,7 @@ namespace next {
             subtitle_stream_index = ret;
 
             subtitle_stream = fmt_ctx->streams[subtitle_stream_index];
-            mSubtitleQueueRef->onCodecParametersGot(subtitle_stream->codecpar, subtitle_stream->time_base,
+            mSubtitleQueueRef->onCodecParametersGot(this, subtitle_stream->codecpar, subtitle_stream->time_base,
                                                     0);
 
             mHasSubtitle = true;
@@ -252,17 +253,20 @@ namespace next {
             if (ret == AVERROR_EOF) {
                 if (mHasAudio) {
                     auto pkt = av_packet_alloc();
-                    mAudioPktQueueRef->enqueueEnd(pkt);
+                    pkt->stream_index = NEXT_INDEX_END;
+                    mAudioPktQueueRef->enqueueEnd(this, pkt);
                 }
 
                 if (mHasVideo) {
                     auto pkt = av_packet_alloc();
-                    mVideoPktQueueRef->enqueueEnd(pkt);
+                    pkt->stream_index = NEXT_INDEX_END;
+                    mVideoPktQueueRef->enqueueEnd(this, pkt);
                 }
 
                 if (mHasSubtitle) {
                     auto pkt = av_packet_alloc();
-                    mSubtitleQueueRef->enqueueEnd(pkt);
+                    pkt->stream_index = NEXT_INDEX_END;
+                    mSubtitleQueueRef->enqueueEnd(this, pkt);
                 }
 
                 return;
@@ -280,7 +284,7 @@ namespace next {
     void Reader::onMessageSendPackage() {
         if (packet->stream_index == audio_stream_index && audio_stream_index >= 0) {
 
-            if (mAudioPktQueueRef->enqueue(packet)) {
+            if (mAudioPktQueueRef->enqueue(this, packet)) {
                 packet = nullptr;
                 sendMessage(MESSAGE_ID_READ_PKG);
             } else {
@@ -288,14 +292,14 @@ namespace next {
             }
 
         } else if (packet->stream_index == video_stream_index && video_stream_index >= 0) {
-            if (mVideoPktQueueRef->enqueue(packet)) {
+            if (mVideoPktQueueRef->enqueue(this, packet)) {
                 packet = nullptr;
                 sendMessage(MESSAGE_ID_READ_PKG);
             } else {
                 sendMessageDelay(MESSAGE_ID_SEND_PKG, 100);
             }
         }  else if (packet->stream_index == subtitle_stream_index && subtitle_stream_index >= 0) {
-            if (mSubtitleQueueRef->enqueue(packet)) {
+            if (mSubtitleQueueRef->enqueue(this, packet)) {
                 packet = nullptr;
                 sendMessage(MESSAGE_ID_READ_PKG);
             } else {
@@ -342,7 +346,7 @@ namespace next {
                 }
             }
 
-            mVideoPktQueueRef->onCodecParametersGot(video_stream->codecpar,
+            mVideoPktQueueRef->onCodecParametersGot(this, video_stream->codecpar,
                                                     video_stream->time_base, rotation);
 
 
@@ -359,7 +363,7 @@ namespace next {
         auto audio_stream_index = ret;
         if (audio_stream_index >= 0) {
             audio_stream = fmt_ctx->streams[audio_stream_index];
-            mAudioPktQueueRef->onCodecParametersGot(audio_stream->codecpar, audio_stream->time_base,
+            mAudioPktQueueRef->onCodecParametersGot(this, audio_stream->codecpar, audio_stream->time_base,
                                                     0);
 
 
@@ -428,7 +432,7 @@ namespace next {
             pktCount++;
             if (pkt->stream_index == audio_stream_index && audio_stream_index >= 0) {
                 while (!isStopped()) {
-                    if (mAudioPktQueueRef->enqueue(pkt)) {
+                    if (mAudioPktQueueRef->enqueue(this, pkt)) {
                         pkt = nullptr;
                         break;
                     }
@@ -439,7 +443,7 @@ namespace next {
                 }
             } else if (pkt->stream_index == video_stream_index && video_stream_index >= 0) {
                 while (!isStopped()) {
-                    if (mVideoPktQueueRef->enqueue(pkt)) {
+                    if (mVideoPktQueueRef->enqueue(this, pkt)) {
                         pkt = nullptr;
                         break;
                     }
@@ -480,44 +484,6 @@ namespace next {
     }
 
     void Reader::sendEndPkt() {
-
-        if (mHasAudio) {
-            auto pkt = av_packet_alloc();
-            pkt->stream_index = -1;
-            while (!isStopped() && !hasSeek()) {
-                if (mAudioPktQueueRef->enqueue(pkt)) {
-                    pkt = nullptr;
-                    break;
-                }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-
-            if (pkt != nullptr) {
-                av_packet_free(&pkt);
-            }
-
-            if (isStopped() || hasSeek()) {
-                return;
-            }
-        }
-
-        if (mHasVideo) {
-            auto pkt = av_packet_alloc();
-            pkt->stream_index = -1;
-            while (!isStopped() && !hasSeek()) {
-                if (mVideoPktQueueRef->enqueue(pkt)) {
-                    pkt = nullptr;
-                    break;
-                }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-
-            if (pkt != nullptr) {
-                av_packet_free(&pkt);
-            }
-        }
 
     }
 

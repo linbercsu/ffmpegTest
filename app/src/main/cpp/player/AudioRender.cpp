@@ -487,7 +487,7 @@ namespace next {
     AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mThread(this), mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 8), mMediaClockRef(clock) {
         mAudioDevice = new AudioDevice(this);
-        sendMessage(MESSAGE_ID_INIT_RENDER, MESSAGE_PRIORITY_INIT);
+        sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
     }
 
     AudioRender::~AudioRender() {
@@ -772,7 +772,7 @@ namespace next {
 
     void AudioRender::handleMessage(const next::Message &message) {
         switch (message.getId()) {
-            case MESSAGE_ID_INIT_RENDER: {
+            case MESSAGE_ID_INIT_DECODER: {
                 onMessageInit();
                 break;
             }
@@ -798,7 +798,7 @@ namespace next {
             }
 
             case MESSAGE_ID_PRE_SEEK: {
-                onMessagePreSeek();
+//                onMessagePreSeek();
                 break;
             }
 
@@ -827,6 +827,11 @@ namespace next {
         if (codecParameters == nullptr) {
             sendMessageDelay(MESSAGE_ID_INIT_RENDER, 100);
             return;
+        }
+
+        if (mDataContext != nullptr) {
+            delete mDataContext;
+            mDataContext = nullptr;
         }
 
         mDataContext = new AudioDataContext();
@@ -859,63 +864,50 @@ namespace next {
     }
 
     void AudioRender::onMessageProcessPkt()  {
-        auto dec_ctx = mDataContext->decoderContext;
-        auto timeBase = mDataContext->timebase;
         bool clear = false;
-        bool resetFirstPts = false;
+
         AVPacket *pkt = mQueueRef->getPkt(&clear);
-        if (clear) {
-            mDataContext->seek = false;
-            mFrameQueue.clear();
-            mAudioDevice->reset();
-
-            avcodec_flush_buffers(dec_ctx);
-            mDataContext->frameBuffer.clear();
-            resetFirstPts = true;
-        } else {
-            if (mDataContext->seek) {
-                av_packet_free(&pkt);
-                sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
-                return;
-            }
-        }
-
         if (pkt == nullptr) {
-            if (clear) {
-                sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
-            } else {
-                sendMessageDelay(MESSAGE_ID_PROCESS_PACKAGE, 100);
-            }
+            sendMessageDelay(MESSAGE_ID_PROCESS_PACKAGE, 10);
             return;
         }
 
-        //end
-        bool end = false;
-        if (pkt->stream_index == -1) {
-            end = true;
+        if (pkt->stream_index == NEXT_INDEX_TRACK_CHANGED) {
+            av_packet_free(&pkt);
+            sendMessage(MESSAGE_ID_INIT_DECODER, MESSAGE_PRIORITY_INIT);
+            return;
+        } else if (pkt->stream_index == NEXT_INDEX_END) {
             av_packet_free(&pkt);
             pkt = nullptr;
+
+            mDataContext->resendPkt = nullptr;
+            onMessageResendPkt();
+        } else if (pkt->stream_index == NEXT_INDEX_SEEK) {
+            mDataContext->seek = false;
+            mFrameQueue.clear();
+            auto dec = mDataContext->decoderContext;
+            avcodec_flush_buffers(dec);
+            sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+        } else {
+            mDataContext->resendPkt = pkt;
+            onMessageResendPkt();
         }
-
-        if (resetFirstPts && !end) {
-            resetFirstPts = false;
-
-            int64_t pts = av_rescale_q(pkt->pts,
-                                       timeBase,
-                                       AV_TIME_BASE_Q);
-
-            mAudioDevice->setStartPts(pts);
-        }
-
-        mDataContext->resendPkt = pkt;
-
-        onMessageResendPkt();
     }
 
     void AudioRender::onMessageResendPkt()  {
-        int ret = 0;
-        auto dec = mDataContext->decoderContext;
         auto pkt = mDataContext->resendPkt;
+        auto dec = mDataContext->decoderContext;
+        int action = mQueueRef->getTopAction();
+        if (action == NEXT_INDEX_SEEK || action == NEXT_INDEX_TRACK_CHANGED) {
+            mThread.messageQueue().removeMessageById(MESSAGE_ID_RECEIVE_FRAME);
+            mDataContext->resendPkt = nullptr;
+            av_packet_free(&pkt);
+            avcodec_flush_buffers(dec);
+            sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+            return;
+        }
+
+        int ret = 0;
 
         ret = avcodec_send_packet(dec, pkt);
 

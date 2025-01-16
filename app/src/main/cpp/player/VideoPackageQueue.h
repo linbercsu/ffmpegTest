@@ -16,18 +16,22 @@ struct AVPacket;
 
 namespace next {
 
+    class Reader;
+
     class VideoPackageQueue {
     public:
         VideoPackageQueue();
         ~VideoPackageQueue();
-        void onCodecParametersGot(AVCodecParameters *parameters, AVRational timebase, int i);
+        void onCodecParametersGot(Reader* reader, AVCodecParameters *parameters, AVRational timebase, int rotation);
         struct AVCodecParameters* getCodecParameters();
         int getRotation();
         AVRational getTimebase();
-        bool enqueue(struct AVPacket* pkt);
-        bool enqueueEnd(struct AVPacket* pkt);
+        bool enqueue(Reader* reader, struct AVPacket* pkt);
+        bool enqueueEnd(Reader* reader, struct AVPacket* pkt);
+        void seek(Reader* reader);
         void setNeedClear();
         AVPacket *getPkt(bool *pBoolean);
+        int getTopAction();
 
         void end();
         bool isEnd();
@@ -43,6 +47,7 @@ namespace next {
         std::mutex mLock;
         int mSize{0};
         bool needClear{false};
+        Reader* currentReader{nullptr};
     };
 }
 
