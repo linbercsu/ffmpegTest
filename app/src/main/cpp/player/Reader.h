@@ -31,7 +31,6 @@ namespace next {
         ~Reader();
 
         void release();
-        void run();
 
         void start();
         void pause();
@@ -40,8 +39,6 @@ namespace next {
         void seek();
         void seekBackward(int64_t newPosition);
         void seekForward(int64_t newPosition);
-        int64_t getSeekPosition();
-        bool hasSeek();
 
         void handleMessage(const next::Message &message) override;
         void onThreadEnded() override;
@@ -55,7 +52,6 @@ namespace next {
         void sendMessageDelay(int id, int delayMs);
 
         bool isStopped();
-        void sendEndPkt();
     private:
         ReaderCallback* mReaderCallback{nullptr};
         VideoPackageQueue* mVideoPktQueueRef{nullptr};

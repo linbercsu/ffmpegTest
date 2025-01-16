@@ -60,11 +60,11 @@ namespace next {
         }
 
         if (mVideoPktQueueRef != nullptr) {
-            mVideoPktQueueRef->clear();
+            mVideoPktQueueRef->clear(this);
         }
 
         if (mAudioPktQueueRef != nullptr) {
-            mAudioPktQueueRef->clear();
+            mAudioPktQueueRef->clear(this);
         }
     }
 
@@ -98,10 +98,6 @@ namespace next {
             default:
                 break;
         }
-    }
-
-    void Reader::run() {
-        Releasable<Reader> r(this);
     }
 
     void Reader::sendMessage(int id) {
@@ -321,7 +317,6 @@ namespace next {
     void Reader::stop() {
         stopped.store(true);
         mThread.stop();
-//        mThread->join();
     }
 
     void Reader::join() {
@@ -340,10 +335,6 @@ namespace next {
 
     }
 
-    void Reader::sendEndPkt() {
-
-    }
-
     bool Reader::isStopped() {
         return stopped.load();
     }
@@ -352,33 +343,10 @@ namespace next {
         next_log("seekBackward %ld, %d", newPosition, __LINE__);
         mThread.messageQueue().pushBack(
                 Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition).withCallback(this));
-//        auto seek = newPosition | 0x8000000000000000L;
-//        mSeekPosition.store(seek);
     }
 
     void Reader::seekForward(int64_t newPosition) {
         next_log("seekForward %ld, %d", newPosition, __LINE__);
         mThread.messageQueue().pushBack(Message(MESSAGE_ID_SEEK, MESSAGE_PRIORITY_SEEK).withData2(newPosition).withCallback(this));
-//        auto seek = newPosition | 0x8000000000000000L;
-//        mSeekPosition.store(seek);
-    }
-
-    int64_t Reader::getSeekPosition() {
-        int64_t seek = mSeekPosition.load();
-        if ((seek & 0x8000000000000000L) == 0) {
-            return -1;
-        } else {
-            mSeekPosition.store(0);
-            return seek & 0x7fffffffffffffff;    
-        }
-    }
-
-    bool Reader::hasSeek() {
-        int64_t seek = mSeekPosition.load();
-        if ((seek & 0x8000000000000000L) == 0) {
-            return false;
-        }
-
-        return true;
     }
 }

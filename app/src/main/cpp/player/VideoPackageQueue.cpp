@@ -177,12 +177,15 @@ namespace next {
     }
      */
 
-    void VideoPackageQueue::clear() {
+    void VideoPackageQueue::clear(Reader* reader) {
         std::lock_guard<std::mutex> l(mLock);
+        if (currentReader != reader) {
+            return;
+        }
+
         for (auto pkt : mPktList) {
             auto ptr = pkt;
             if (ptr != nullptr) {
-//                av_packet_unref(ptr);
                 mSize -= ptr->size;
                 av_packet_free(&ptr);
             }
@@ -203,46 +206,6 @@ namespace next {
     AVRational VideoPackageQueue::getTimebase() {
         std::lock_guard<std::mutex> l(mLock);
         return mTimeBase;
-    }
-
-    bool VideoPackageQueue::getClearFlagAndClear() {
-        std::lock_guard<std::mutex> l(mLock);
-        auto clear = needClear;
-        needClear = false;
-
-        if (clear) {
-
-//            bool erase = false;
-            while (true) {
-                bool find = false;
-                for (auto ite = mPktList.begin(); ite != mPktList.end(); ite++) {
-                    auto ptr = ite.operator*();
-                    if (ptr == nullptr) {
-                        find = true;
-                        break;
-                    }
-                }
-
-                if (find) {
-                    for (auto ite = mPktList.begin(); ite != mPktList.end();) {
-                        auto ptr = ite.operator*();
-                        if (ptr == nullptr) {
-                            mPktList.erase(ite);
-                            break;
-                        } else {
-                            mSize -= ptr->size;
-                            av_packet_unref(ptr);
-                            av_packet_free(&ptr);
-                            ite = mPktList.erase(ite);
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-            }
-
-        return clear;
     }
 
     void VideoPackageQueue::seek(Reader* reader) {
@@ -278,12 +241,6 @@ namespace next {
         pkt->stream_index = NEXT_INDEX_SEEK;
 
         mPktList.emplace_back(pkt);
-    }
-
-    void VideoPackageQueue::setNeedClear() {
-        std::lock_guard<std::mutex> l(mLock);
-        needClear = true;
-        mPktList.emplace_back(nullptr);
     }
 
     VideoPackageQueue::~VideoPackageQueue() {

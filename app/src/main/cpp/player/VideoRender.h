@@ -46,8 +46,6 @@ namespace next {
         ~VideoRender();
         void stop();
 
-        void run();
-
         void release();
 
         void updateEffect(int effectIndex);
@@ -64,12 +62,9 @@ namespace next {
         void handleMessage(const next::Message &message) override;
         void onThreadEnded() override;
     private:
-        void runInternal();
         bool isStopped();
-        void decode(AVCodecContext *dec, const AVPacket *package, struct AVFrame *frame);
 
         void onFrame(struct AVFrame *frame, AVRational timebase);
-        void render();
 
         void setCurrentFrame();
         void releaseAndSetCurrentFrame();

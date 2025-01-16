@@ -29,14 +29,12 @@ namespace next {
         bool enqueue(Reader* reader, struct AVPacket* pkt);
         bool enqueueEnd(Reader* reader, struct AVPacket* pkt);
         void seek(Reader* reader);
-        void setNeedClear();
         AVPacket *getPkt(bool *pBoolean);
         int getTopAction();
 
         void end();
         bool isEnd();
-        void clear();
-        bool getClearFlagAndClear();
+        void clear(Reader* reader);
     private:
         bool mEnd{false};
         bool mCodecParametersGot{false};

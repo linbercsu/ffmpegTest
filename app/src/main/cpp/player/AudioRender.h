@@ -28,9 +28,6 @@ namespace next {
     public:
         AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
         ~AudioRender();
-        void run();
-
-        void runInternal();
         void release();
         void stop();
         void pause();
@@ -48,8 +45,6 @@ namespace next {
         void onThreadEnded() override;
 
     private:
-        void render();
-        void decode(struct AVCodecContext *dec, const struct AVPacket *package, struct AVFrame *videoFrame, int speed);
         void onFrame(AVFrame *frame, AVRational timebase, int speed);
 
 
