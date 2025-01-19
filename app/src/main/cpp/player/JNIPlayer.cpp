@@ -18,7 +18,7 @@ jlong createPlayer(JNIEnv *env,
     jboolean copy;
     const char *sourcePath = env->GetStringUTFChars(path, &copy);
 
-    auto player = new next::Player(std::string(sourcePath));
+    auto player = new next::Player(env, thzz, std::string(sourcePath));
 
     env->ReleaseStringUTFChars(path, sourcePath);
 

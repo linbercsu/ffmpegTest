@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
         player = TinyPlayer(path)
         player.play()
 
+        player.bindSubtitleView(subtitleView);
         player.bindGLSurfaceView(glSurfaceView);
 //        glSurfaceView.setRenderer(player)
 

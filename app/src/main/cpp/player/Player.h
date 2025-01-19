@@ -8,6 +8,7 @@
 #include "VideoPackageQueue.h"
 #include "MediaClock.h"
 #include <atomic>
+#include <jni.h>
 
 namespace next {
 
@@ -19,7 +20,7 @@ namespace next {
     class Player : ReaderCallback {
 
     public:
-        Player(std::string path);
+        Player(JNIEnv *env, jobject javaPlayer, std::string path);
         ~Player();
         void start();
         void pause();

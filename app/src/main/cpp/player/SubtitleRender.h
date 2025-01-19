@@ -6,8 +6,10 @@
 
 #include "MediaClock.h"
 #include "concurrent/MessageThread.h"
+#include <jni.h>
 
 struct AVPacket;
+struct AVSubtitle;
 
 namespace next {
 
@@ -17,11 +19,12 @@ namespace next {
     class SubtitleRender : public MessageCallback, MessageThreadCallback {
 
     public:
-        SubtitleRender(next::VideoPackageQueue *pQueue, MediaClock* clock);
+        SubtitleRender(JNIEnv *env, jobject javaPlayer, next::VideoPackageQueue *pQueue, MediaClock* clock);
 
         void stop();
 
         void handleMessage(const next::Message &message) override;
+        void onThreadStarted() override;
         void onThreadEnded() override;
 
     private:
@@ -31,12 +34,18 @@ namespace next {
         void sendMessage(int id);
         void sendMessage(int id, int priority);
         void sendMessageDelay(int id, int delayMs);
+
+        void displaySubtitle(struct AVSubtitle* subtitle);
     private:
         VideoPackageQueue* mQueueRef;
         MediaClock* mMediaClockRef;
         MessageThread mThread;
         DataContext* mDataContext{nullptr};
         struct AVPacket* package{nullptr};
+        JavaVM* jvm{nullptr};
+        JNIEnv* jvmEnv{nullptr};
+        jobject javaPlayerRef{nullptr};
+        jmethodID methodId{nullptr};
 
     };
 

@@ -3,6 +3,7 @@ package com.mxtech.av;
 import android.opengl.GLSurfaceView;
 import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
 
 import androidx.annotation.Keep;
 
@@ -20,6 +21,8 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
 
     int speed = 1;
     int effect = 0;
+
+    private TextView subtitleView;
     public TinyPlayer(String path) {
         this.path = path;
     }
@@ -40,6 +43,10 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
             }
         });
         surfaceView.setRenderer(this);
+    }
+
+    public void bindSubtitleView(TextView textView) {
+        subtitleView = textView;
     }
 
     public void play() {
@@ -122,6 +129,13 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
     @Keep
     private void displaySubtitle(String subtitle) {
         Log.e("test", "displaySubtitle: " + subtitle);
+
+        subtitleView.post(new Runnable() {
+            @Override
+            public void run() {
+                subtitleView.setText(subtitle);
+            }
+        });
     }
 
     private native long createPlayer(String path);

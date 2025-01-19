@@ -10,7 +10,7 @@
 
 namespace next {
 
-    Player::Player(std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mSubtitlePackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue,
+    Player::Player(JNIEnv *env, jobject javaPlayer, std::string path): mPath(path), mVideoPackageQueue(), mAudioPackageQueue(), mSubtitlePackageQueue(), mReader(path, &mVideoPackageQueue, &mAudioPackageQueue,
                                                                                                                                 nullptr, this) {
         mVideoRender = new VideoRender(&mVideoPackageQueue, &mMediaClock);
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
@@ -18,7 +18,7 @@ namespace next {
         auto subtitlePath = std::string("/sdcard/Download/a.srt");
         mExternalSubtitleReader = new Reader(subtitlePath, nullptr, nullptr, &mSubtitlePackageQueue,
                                              nullptr);
-        mSubtitleRender = new SubtitleRender(&mSubtitlePackageQueue, &mMediaClock);
+        mSubtitleRender = new SubtitleRender(env, javaPlayer, &mSubtitlePackageQueue, &mMediaClock);
     }
 
     Player::~Player() {

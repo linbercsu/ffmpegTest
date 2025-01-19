@@ -153,6 +153,8 @@ namespace next {
     class MessageThreadCallback {
     public:
         virtual void onThreadEnded() = 0;
+
+        virtual void onThreadStarted();
     };
 
     class MessageThread {

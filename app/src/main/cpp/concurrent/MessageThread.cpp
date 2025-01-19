@@ -155,6 +155,10 @@ namespace next {
     /////////////////////////////////////////
 
     void MessageThread::run() {
+        if (mMessageThreadCallback != nullptr) {
+            mMessageThreadCallback->onThreadStarted();
+        }
+
         while (!mStopped.load(std::memory_order_acquire)) {
             Message message = mMessageQueue.next();
 
@@ -189,4 +193,7 @@ namespace next {
     }
 
 
+    void MessageThreadCallback::onThreadStarted() {
+
+    }
 }

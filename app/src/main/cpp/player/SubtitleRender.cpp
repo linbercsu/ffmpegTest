@@ -44,8 +44,12 @@ namespace next {
 
     }
 
-    SubtitleRender::SubtitleRender(next::VideoPackageQueue *pQueue, MediaClock *clock):mQueueRef(pQueue), mMediaClockRef(clock), mThread(this) {
+    SubtitleRender::SubtitleRender(JNIEnv *env, jobject javaPlayer, next::VideoPackageQueue *pQueue, MediaClock *clock):mQueueRef(pQueue), mMediaClockRef(clock), mThread(this) {
+        env->GetJavaVM(&jvm);
+        javaPlayerRef = env->NewGlobalRef(javaPlayer);
         sendMessage(MESSAGE_ID_INIT, MESSAGE_PRIORITY_INIT);
+        jclass cl = env->GetObjectClass(javaPlayer);
+        methodId = env->GetMethodID(cl, "displaySubtitle", "(Ljava/lang/String;)V");
     }
 
     void SubtitleRender::handleMessage(const Message &message) {
@@ -69,11 +73,42 @@ namespace next {
 
     }
 
+
+    void SubtitleRender::onThreadStarted() {
+        JNIEnv *env = nullptr;
+
+        int err = jvm->GetEnv( (void**)&env, JNI_VERSION_1_2 );
+        if( err != JNI_OK )
+        {
+            if( err != JNI_EDETACHED )
+            {
+                next_log("SubtitleRender::onThreadStarted() GetEnv() error=%d %d", err, __LINE__);
+                if( err == JNI_EVERSION ) {
+
+                }
+            }
+
+            err = jvm->AttachCurrentThread( &env, 0 );
+//            DBG_v( TAG, "Java VM attached to thread #{0}. error={1}", gettid(), err );
+            if( err != JNI_OK )
+            {
+//                LOG_e( TAG, "JavaVM::GetEnv() failed. error={0}", err );
+//                throw JNIError( err );
+            }
+
+        }
+
+        jvmEnv = env;
+    }
+
     void SubtitleRender::onThreadEnded() {
         if (mDataContext != nullptr) {
             delete mDataContext;
             mDataContext = nullptr;
         }
+
+        jvmEnv->DeleteGlobalRef(javaPlayerRef);
+        jvm->DetachCurrentThread();
     }
 
     void SubtitleRender::onMessageInit() {
@@ -178,18 +213,39 @@ namespace next {
 
             if (got_sub) {
 
-                next_log("subtitle onMessageRender begin==============, %d" , __LINE__);
-                for (int i = 0; i < subtitle.num_rects; i++) {
-                    next_log("subtitle onMessageRender text-> %s,  %d", subtitle.rects[i]->text, __LINE__);
-                    next_log("subtitle onMessageRender ass-> %s,  %d", subtitle.rects[i]->ass, __LINE__);
-                }
-                next_log("subtitle onMessageRender end================, %d" , __LINE__);
+//                next_log("subtitle onMessageRender begin==============, %d" , __LINE__);
+//                for (int i = 0; i < subtitle.num_rects; i++) {
+//                    next_log("subtitle onMessageRender text-> %s,  %d", subtitle.rects[i]->text, __LINE__);
+//                    next_log("subtitle onMessageRender ass-> %s,  %d", subtitle.rects[i]->ass, __LINE__);
+//                }
+//                next_log("subtitle onMessageRender end================, %d" , __LINE__);
+
+                displaySubtitle(&subtitle);
+
                 avsubtitle_free(&subtitle);
             }
         }
 
         av_packet_free(&pkt);
         sendMessageDelay(MESSAGE_ID_RENDER, 100);
+    }
+
+    void SubtitleRender::displaySubtitle(struct AVSubtitle* subtitle) {
+        char* ass = nullptr;
+        if (subtitle->num_rects > 0) {
+            ass = subtitle->rects[0]->ass;
+        }
+        
+        if (ass == nullptr) {
+            return;
+        }
+
+        auto str = jvmEnv->NewStringUTF(ass);
+
+        jvmEnv->CallVoidMethod(javaPlayerRef, methodId, str);
+        jvmEnv->ExceptionCheck();
+
+        jvmEnv->DeleteLocalRef(str);
     }
 
     void SubtitleRender::sendMessage(int id) {
@@ -203,4 +259,5 @@ namespace next {
     void SubtitleRender::sendMessageDelay(int id, int delayMs) {
         mThread.messageQueue().pushIfNotExists(Message::simpleMessage(id).delay(delayMs).withCallback(this));
     }
+
 }
