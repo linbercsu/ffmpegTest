@@ -1063,6 +1063,15 @@ namespace next {
             return AAUDIO_CALLBACK_RESULT_STOP;
         }
 
+        auto pts = mFrameQueue.fill(audioData, numFrames);
+
+        if (pts != AV_NOPTS_VALUE) {
+            mMediaClockRef->resetPts(pts);
+        }
+
+        return AAUDIO_CALLBACK_RESULT_CONTINUE;
+
+        /*
         if (currentFrame == nullptr) {
             currentFrame = mFrameQueue.pop();
             if (currentFrame != nullptr) {
@@ -1124,6 +1133,7 @@ namespace next {
         }
 
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
+         */
     }
 
 

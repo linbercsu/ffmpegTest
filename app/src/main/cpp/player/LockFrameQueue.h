@@ -20,6 +20,7 @@ namespace next {
             return mFrameList.empty();
         }
         void pushFrame(struct AVFrame * frame);
+        int64_t fill(void* output, int sampleCount);
         void resetMaxSize(int size);
         struct AVFrame * pop();
         struct AVFrame * first();
@@ -29,6 +30,7 @@ namespace next {
         int mSize;
         int mCurrentSize{0};
         std::list<struct AVFrame *> mFrameList;
+        int mSampleSize{-1};
     };
 }
 
