@@ -23,6 +23,7 @@ namespace next {
 
         const int MESSAGE_ID_SEND_PKG = MESSAGE_ID_SEEK + 1;
         const int MESSAGE_PRIORITY_SEEK = Message::MESSAGE_PRIORITY_NORMAL + 1;
+        const int MESSAGE_PRIORITY_OPEN = MESSAGE_PRIORITY_SEEK + 1;
 
 
 
@@ -44,7 +45,10 @@ namespace next {
 
     Reader::Reader(const std::string& path, VideoPackageQueue* videoPackageQueue, VideoPackageQueue* audioPackageQueue, VideoPackageQueue* subtitleQueue, ReaderCallback* callback):mThread(this), mPath(path), mVideoPktQueueRef(videoPackageQueue), mAudioPktQueueRef(audioPackageQueue), mSubtitleQueueRef(subtitleQueue), mReaderCallback(callback) {
 //        mThread = new std::thread(&Reader::run, this);
-        sendMessage(MESSAGE_ID_OPEN);
+        mThread.messageQueue().pushBack(
+                Message(MESSAGE_ID_OPEN, MESSAGE_PRIORITY_OPEN).withCallback(this));
+
+//        sendMessage(MESSAGE_ID_OPEN);
     }
 
     Reader::~Reader() {
