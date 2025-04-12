@@ -14,6 +14,7 @@
 #include "MediaClock.h"
 #include "BaseEffect.h"
 #include "DirectDraw.h"
+#include "YUVHelper.h"
 #include "concurrent/MessageThread.h"
 
 struct AVCodecContext;
@@ -103,6 +104,7 @@ namespace next {
         int mBaseRotation{0};
         struct AVFrame* reusedVideoFrame{nullptr};
         DataContext* mDataContext{nullptr};
+        nx_effect::YUVHelper* yuvHelper{nullptr};
     };
 }
 

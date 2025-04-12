@@ -10,6 +10,7 @@
 #include "Log.h"
 #include <exception>
 #include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include "GLUtil.h"
 #include "libyuv.h"
 #include "ZEffect.h"
@@ -112,6 +113,30 @@ namespace next {
 
             return 4096;
              */
+        }
+
+        GLuint createTexture() {
+            GLuint texture;
+            glGenTextures(  //创建纹理对象
+                    1, //产生纹理id的数量
+                    &texture
+            );
+
+//        __android_log_print(6, "AudioConverter", "create texture %d %d", texture, texture1);
+
+            glBindTexture(GL_TEXTURE_2D, texture);
+
+            glTexParameterf(GL_TEXTURE_2D,
+                            GL_TEXTURE_MIN_FILTER, GL_LINEAR);//设置MIN 采样方式
+            glTexParameterf(GL_TEXTURE_2D,
+                            GL_TEXTURE_MAG_FILTER, GL_LINEAR);//设置MAG采样方式
+            glTexParameterf(GL_TEXTURE_2D,
+                            GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);//设置S轴拉伸方式
+            glTexParameterf(GL_TEXTURE_2D,
+                            GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
+
+
+            return texture;
         }
     }
 
@@ -355,6 +380,9 @@ namespace next {
         ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
 
         dec_ctx->pkt_timebase = timeBase;
+        dec_ctx->thread_count = 16;  // specific number
+        dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;  // both
+
 
         AVDictionary *opts = nullptr;
         ret = avcodec_open2(dec_ctx, decoder, &opts);
@@ -415,6 +443,14 @@ namespace next {
 
 
 //        auto videoFrame = reusedVideoFrame;
+
+//        if (!(pkt->flags & AV_PKT_FLAG_KEY))
+//        {
+//            mDataContext->resendPkt = nullptr;
+//            av_packet_free(&pkt);
+//            sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
+//            return;
+//        }
 
         ret = avcodec_send_packet(dec, pkt);
 
@@ -495,6 +531,9 @@ namespace next {
     }
 
     void VideoRender::onFrame(AVFrame *frame, AVRational timebase) {
+        if (frame->format != AV_PIX_FMT_YUV420P) {
+            throw std::bad_cast();
+        }
 //        next_log_tag("format", "format: %d", frame->format);
         int64_t p = av_frame_get_best_effort_timestamp(frame);
 
@@ -506,7 +545,8 @@ namespace next {
                          timebase,
                          AV_TIME_BASE_Q);
 
-        auto newFrame = convert(frame);
+//        auto newFrame = convert(frame);
+            auto newFrame = av_frame_clone(frame);
 
 //        auto cp = av_frame_alloc();
 //        av_frame_copy(cp, frame);
@@ -606,8 +646,21 @@ namespace next {
 
         av_frame_free(&mCurrentFrame);
 
-        mCurrentFrame = first;
-        mFrameQueue.pop();
+        while (true) {
+            mCurrentFrame = first;
+            mFrameQueue.pop();
+
+            if (first->pts < clockTime) {
+                first = mFrameQueue.first();
+                if (first == nullptr) {
+                    return;
+                } else {
+                    av_frame_free(&mCurrentFrame);
+                }
+            } else {
+                break;
+            }
+        }
     }
 
 
@@ -647,12 +700,21 @@ namespace next {
         auto originalFrameWidth = mCurrentFrame->width;
         auto originalFrameHeight = mCurrentFrame->height;
 
+        auto frame = mCurrentFrame;
+
+        if (yuvHelper == nullptr) {
+            yuvHelper = new nx_effect::YUVHelper();
+        }
+        yuvHelper->process_frame(frame);
+        auto rgbaTexture = yuvHelper->getRgbaTexture();
 
 
-        GLint oldFBO;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
+
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         nx_effect::checkGlError("glBindFramebuffer");
+//        GLint oldFBO;
+//        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
+
 
 //        GLuint target; //生成纹理id
 //        glGenTextures(  //创建纹理对象
@@ -670,6 +732,7 @@ namespace next {
 //                        GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
 
         if (!fboProcessed) {
+            glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, target);
             fboProcessed = true;
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, originalFrameWidth, originalFrameHeight, 0,
@@ -693,21 +756,25 @@ namespace next {
         }
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mCurrentFrame->width, mCurrentFrame->height, 0,
-                     GL_RGBA, GL_UNSIGNED_BYTE, mCurrentFrame->data[0]);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindTexture(GL_TEXTURE_2D, rgbaTexture);
+//        glBindTexture(GL_TEXTURE_2D, texture);
+//        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mCurrentFrame->width, mCurrentFrame->height, 0,
+//                     GL_RGBA, GL_UNSIGNED_BYTE, mCurrentFrame->data[0]);
+//        glBindTexture(GL_TEXTURE_2D, 0);
+
 
         glViewport(0, 0, originalFrameWidth, originalFrameHeight);
-        effect->draw(0, texture, mCurrentFrame->width, mCurrentFrame->height, 0);
-
-//        GLubyte* pixels = new GLubyte[originalFrameWidth * originalFrameHeight * 4];
-//        glReadPixels(0,0, originalFrameHeight, originalFrameHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        effect->draw(0, rgbaTexture, mCurrentFrame->width, mCurrentFrame->height, 0);
+#if 0
+        GLubyte* pixels = new GLubyte[originalFrameWidth * originalFrameHeight * 4];
+        glReadPixels(0,0, originalFrameHeight, originalFrameHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 //        lodepng_encode32_file((std::string("/sdcard/Download/tmp/image-") + std::to_string(nowMicro()) + ".png").c_str(), (const unsigned char *)pixels, originalFrameWidth, originalFrameHeight);
+        lodepng_encode32_file((std::string("/sdcard/Download/tmp/image-") + std::to_string(1) + ".png").c_str(), (const unsigned char *)pixels, originalFrameWidth, originalFrameHeight);
 
-//        delete pixels;
-
-        glBindFramebuffer(GL_FRAMEBUFFER, oldFBO);
+        delete pixels;
+#endif
+//        glBindFramebuffer(GL_FRAMEBUFFER, oldFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
 
         auto texturePadding = mCurrentFrame->channels;

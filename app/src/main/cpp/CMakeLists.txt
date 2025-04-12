@@ -97,6 +97,7 @@ add_library( # Sets the name of the library.
         effect/GrayEffect.cpp
         effect/DirectDraw.cpp
         effect/MirrorEffect.cpp
+        effect/YUVHelper.cpp
         )
 
 INCLUDE_DIRECTORIES(
@@ -201,7 +202,7 @@ find_library( # Sets the name of the path variable.
 
 find_library( z-lib z)
 find_library( gl-lib GLESV2)
-#find_library( gl-lib GLESV3)
+find_library( gl-lib3 GLESV3)
 find_library( audio-lib aaudio)
 
 string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
@@ -228,6 +229,7 @@ target_link_libraries( # Specifies the target library.
                        ${log-lib}
                        ${z-lib}
                        ${gl-lib}
+                       ${gl-lib3}
                        ${audio-lib}
         yuv
         )
