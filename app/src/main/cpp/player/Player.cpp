@@ -15,9 +15,9 @@ namespace next {
         mVideoRender = new VideoRender(&mVideoPackageQueue, &mMediaClock);
         mAudioRender = new AudioRender(&mAudioPackageQueue, &mMediaClock);
 
-        auto subtitlePath = std::string("/sdcard/Download/a.srt");
-        mExternalSubtitleReader = new Reader(subtitlePath, nullptr, nullptr, &mSubtitlePackageQueue,
-                                             nullptr);
+//        auto subtitlePath = std::string("/sdcard/Download/a.srt");
+//        mExternalSubtitleReader = new Reader(subtitlePath, nullptr, nullptr, &mSubtitlePackageQueue,
+//                                             nullptr);
         mSubtitleRender = new SubtitleRender(env, javaPlayer, &mSubtitlePackageQueue, &mMediaClock);
     }
 

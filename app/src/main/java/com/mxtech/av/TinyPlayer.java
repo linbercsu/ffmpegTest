@@ -1,6 +1,7 @@
 package com.mxtech.av;
 
 import android.opengl.GLSurfaceView;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
@@ -21,6 +22,10 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
 
     int speed = 1;
     int effect = 0;
+
+    private int frameCount;
+    private volatile int frameRate;
+    private long last;
 
     private TextView subtitleView;
     public TinyPlayer(String path) {
@@ -94,6 +99,10 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
         nativeUpdateEffect(ref, effect);
     }
 
+    public int getFrameRate() {
+        return frameRate;
+    }
+
     public void backward(long duration) {
         nativeBackward(ref, duration);
     }
@@ -120,6 +129,14 @@ public class TinyPlayer implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl10) {
+        long now = SystemClock.elapsedRealtime();
+        if (now - last > 500) {
+            frameRate = (int)(frameCount * 1000 / (now - last));
+            last = now;
+            frameCount = 0;
+        } else {
+            frameCount++;
+        }
         nativeOnDrawFrame(ref);
     }
 

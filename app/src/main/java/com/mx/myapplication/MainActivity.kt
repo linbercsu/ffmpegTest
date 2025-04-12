@@ -7,6 +7,8 @@ import android.opengl.GLSurfaceView
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
@@ -21,11 +23,22 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private lateinit var glSurfaceView: GLSurfaceView
+    private lateinit var frameRateView: TextView
 
     private lateinit var audioConverter: AsyncMediaConverter2
     private lateinit var converter: AsyncAudioConverter
     private lateinit var player: TinyPlayer
     private var rotation = 0
+
+    private val handler = Handler(Looper.getMainLooper())
+    fun refreshFrameRate() {
+        val rate = player.frameRate
+        frameRateView.text = rate.toString()
+
+        handler.postDelayed({
+            refreshFrameRate()
+        }, 500)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,7 +50,8 @@ class MainActivity : AppCompatActivity() {
         val fileUri = if (contentUri != null) {
             contentUri
         } else {
-            Uri.fromFile(File("/sdcard/Download/a.skm"))
+//            Uri.fromFile(File("/sdcard/Download/a.skm"))
+            Uri.fromFile(File("/sdcard/Download/joke.mp4"))
         }
 
         val path = if (fileUri.scheme == "file") {
@@ -47,6 +61,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_main)
+        frameRateView = findViewById<TextView>(R.id.frame_rate)
         val root = findViewById<FrameLayout>(R.id.gl_root)
         glSurfaceView = GLSurfaceView(root.context)
 
@@ -60,6 +75,8 @@ class MainActivity : AppCompatActivity() {
 //        player = TinyPlayer("/sdcard/Download/joke.mp4")
         player = TinyPlayer(path)
         player.play()
+
+        refreshFrameRate()
 
         player.bindSubtitleView(subtitleView);
         player.bindGLSurfaceView(glSurfaceView);

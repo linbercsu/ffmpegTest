@@ -90,9 +90,13 @@ namespace next {
         MediaClock* mClock;
         GLuint textures[1];
         GLuint texture;
+        GLuint fbo;
+        GLuint target;
+        bool fboProcessed{false};
         nx_effect::BaseEffect* effect{nullptr};
         nx_effect::DirectDraw* directDraw{nullptr};
         int mEffectIndex{0};
+        int mNewEffectIndex{0};
         int width;
         int height;
         int mRotation{0};

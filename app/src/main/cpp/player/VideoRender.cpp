@@ -83,6 +83,9 @@ namespace next {
         }
 
         int getCorrectWidth(AVFrame * frame) {
+            return frame->width;
+
+            /*
             if (frame->width < 64) {
                 return 64;
             }
@@ -108,6 +111,7 @@ namespace next {
             }
 
             return 4096;
+             */
         }
     }
 
@@ -454,6 +458,7 @@ namespace next {
         }
 
         if (ret == AVERROR(EAGAIN)) {
+            sendMessageDelay(MESSAGE_ID_RECEIVE_FRAME, 10);
             return;
         }
         sendMessage(MESSAGE_ID_RECEIVE_FRAME);
@@ -556,6 +561,26 @@ namespace next {
                         GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
 
 
+        glGenFramebuffers(1,&fbo);
+        nx_effect::checkGlError("glGenFramebuffers");
+
+
+        glGenTextures(  //创建纹理对象
+                1, //产生纹理id的数量
+                &target
+        );
+
+        glBindTexture(GL_TEXTURE_2D, target);
+
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_MIN_FILTER, GL_NEAREST);//设置MIN 采样方式
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_MAG_FILTER, GL_LINEAR);//设置MAG采样方式
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);//设置S轴拉伸方式
+        glTexParameterf(GL_TEXTURE_2D,
+                        GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
+
     }
 
     //gl thread
@@ -589,13 +614,25 @@ namespace next {
 
     //gl thread
     void VideoRender::onDrawFrame() {
-        std::lock_guard<std::mutex> l(mFrameLock);
-        prepareFrame();
+        {
+            std::lock_guard<std::mutex> l(mFrameLock);
+
+            if (mEffectIndex != mNewEffectIndex) {
+                if (effect != nullptr) {
+                    delete effect;
+                    effect = nullptr;
+                }
+                mEffectIndex = mNewEffectIndex;
+            }
+
+            prepareFrame();
+        }
         if (mCurrentFrame == nullptr) {
             return;
         }
 
         auto rotation = (mBaseRotation + mRotation) % 360;
+
 
         if (effect == nullptr) {
             effect = createEffect(mEffectIndex, rotation);
@@ -610,39 +647,39 @@ namespace next {
         auto originalFrameWidth = mCurrentFrame->width;
         auto originalFrameHeight = mCurrentFrame->height;
 
-        GLuint fbo;
-        glGenFramebuffers(1,&fbo);
-        nx_effect::checkGlError("glGenFramebuffers");
+
 
         GLint oldFBO;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         nx_effect::checkGlError("glBindFramebuffer");
 
-        GLuint target; //生成纹理id
-        glGenTextures(  //创建纹理对象
-                1, //产生纹理id的数量
-                &target
-        );
+//        GLuint target; //生成纹理id
+//        glGenTextures(  //创建纹理对象
+//                1, //产生纹理id的数量
+//                &target
+//        );
 
-        glBindTexture(GL_TEXTURE_2D, target);
+//        glTexParameterf(GL_TEXTURE_2D,
+//                        GL_TEXTURE_MIN_FILTER, GL_NEAREST);//设置MIN 采样方式
+//        glTexParameterf(GL_TEXTURE_2D,
+//                        GL_TEXTURE_MAG_FILTER, GL_LINEAR);//设置MAG采样方式
+//        glTexParameterf(GL_TEXTURE_2D,
+//                        GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);//设置S轴拉伸方式
+//        glTexParameterf(GL_TEXTURE_2D,
+//                        GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
 
-        glTexParameterf(GL_TEXTURE_2D,
-                        GL_TEXTURE_MIN_FILTER, GL_NEAREST);//设置MIN 采样方式
-        glTexParameterf(GL_TEXTURE_2D,
-                        GL_TEXTURE_MAG_FILTER, GL_LINEAR);//设置MAG采样方式
-        glTexParameterf(GL_TEXTURE_2D,
-                        GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);//设置S轴拉伸方式
-        glTexParameterf(GL_TEXTURE_2D,
-                        GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);//设置T轴拉伸方式
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, originalFrameWidth, originalFrameHeight, 0,
-                     GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        if (!fboProcessed) {
+            glBindTexture(GL_TEXTURE_2D, target);
+            fboProcessed = true;
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, originalFrameWidth, originalFrameHeight, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glBindTexture(GL_TEXTURE_2D, 0);
 
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, target, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, target, 0);
+        }
         nx_effect::checkGlError("glFramebufferTexture2D");
 
 //        unsigned int rbo;
@@ -787,9 +824,9 @@ namespace next {
 
         */
 
-        glDeleteFramebuffers(1, &fbo);
+//        glDeleteFramebuffers(1, &fbo);
 
-        glDeleteTextures(1, &target);
+//        glDeleteTextures(1, &target);
 //        glDeleteRenderbuffers(1, &rbo);
 
         /*
@@ -847,14 +884,14 @@ namespace next {
             return;
         }
 
-        mEffectIndex = effectIndex;
+        mNewEffectIndex = effectIndex;
+//        mEffectIndex = effectIndex;
 
-        if (effect != nullptr) {
-            delete effect;
-            effect = nullptr;
-        }
+//        if (effect != nullptr) {
+//            delete effect;
+//            effect = nullptr;
+//        }
 
-//        effect = createEffect(effectIndex);
     }
 
     void VideoRender::rotate(int rotation) {
