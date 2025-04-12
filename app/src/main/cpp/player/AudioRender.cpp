@@ -22,13 +22,23 @@ extern "C" {
 #include "libavutil/opt.h"
 }
 
+class AndroidAAudioDataCallback {
+public:
+    virtual aaudio_data_callback_result_t onAndroidAAudioDataCallback(
+            AAudioStream *stream,
+            void *audioData,
+            int32_t numFrames) = 0;
+};
+
 static aaudio_data_callback_result_t audioStream_dataCallback(
         AAudioStream *stream,
         void *userData,
         void *audioData,
         int32_t numFrames) {
-    auto render = (next::AudioRender*) userData;
-    return render->audioStream_dataCallback(stream, audioData, numFrames);
+//    auto render = (next::AudioRender*) userData;
+//    return render->audioStream_dataCallback(stream, audioData, numFrames);
+    auto render = (AndroidAAudioDataCallback*) userData;
+    return render->onAndroidAAudioDataCallback(stream, audioData, numFrames);
 }
 
 namespace next {
@@ -50,6 +60,129 @@ namespace next {
 
 
     }
+
+    AudioOutput::~AudioOutput() {
+
+    }
+
+    class AndroidAAudioOutput : public AudioOutput, AndroidAAudioDataCallback {
+    public:
+        ~AndroidAAudioOutput() {
+
+        }
+
+        void start() override {
+            AAudioStream_requestStart(mStream);
+        }
+
+        void pause() override {
+            AAudioStream_requestPause(mStream);
+        }
+
+        void close() override {
+            if (mStream != nullptr) {
+                AAudioStream_close(mStream);
+                mStream = nullptr;
+            }
+        }
+
+        int getSampleRate() override {
+            return outputSampleRate;
+        }
+
+        int getChannelLayout() override {
+            return outputChannelLayout;
+        }
+
+        int getChannelCount() override {
+            return outputChannelCount;
+        }
+
+        int getFormat() override {
+            return outputSampleFormat;
+        }
+
+        void open(next::AudioRender *render) override {
+            this->audioRender = render;
+
+            AAudioStreamBuilder *builder;
+            aaudio_result_t result = AAudio_createStreamBuilder(&builder);
+            AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
+            AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_I16);
+            AAudioStreamBuilder_setDataCallback(builder, audioStream_dataCallback, static_cast<AndroidAAudioDataCallback*>(this));
+            next_log_tag("Audio", "open %d %d", result, __LINE__);
+// Setup stream any way you want.
+//            AAudioStreamBuilder_setChannelCount(builder, numChannels);
+//            AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT); // or PCM16
+
+
+            result = AAudioStreamBuilder_openStream(builder, &mStream);
+            next_log_tag("Audio", "open %d %d", result, __LINE__);
+            AAudioStreamBuilder_delete(builder);
+            if (result != AAUDIO_OK) {
+                throw std::bad_alloc();
+            }
+
+//            int32_t framesPerBurst = AAudioStream_getFramesPerBurst(stream);
+            outputSampleRate = AAudioStream_getSampleRate(mStream);
+//            samplesPerFrame = AAudioStream_getSamplesPerFrame(stream);
+//            samplesPerFrame = sampleRate / 50;
+//            samplesPerFrame = framesPerBurst;
+            outputChannelCount = AAudioStream_getChannelCount(mStream);
+
+            // Common default mappings
+            switch (outputChannelCount) {
+                case 1: // Mono
+                    outputChannelLayout = AV_CH_LAYOUT_MONO;
+                    break;
+                case 2: // Stereo (Left, Right)
+                    outputChannelLayout = AV_CH_LAYOUT_STEREO;
+                    break;
+                case 3:
+                    outputChannelLayout = AV_CH_LAYOUT_2POINT1;
+                    break;
+                case 4:
+                    outputChannelLayout = AV_CH_LAYOUT_3POINT1;
+                    break;
+                case 5:
+                    outputChannelLayout = AV_CH_LAYOUT_4POINT1;
+                    break;
+                case 6: // 5.1 surround
+                    outputChannelLayout = AV_CH_LAYOUT_5POINT1;
+                    break;
+                default:
+                    throw std::bad_cast();
+                    // etc.
+            }
+
+            auto format = AAudioStream_getFormat(mStream);
+
+            if (format == AAUDIO_FORMAT_PCM_I16) {
+                outputSampleFormat = AV_SAMPLE_FMT_S16;
+            } else if (format == AAUDIO_FORMAT_PCM_FLOAT) {
+                outputSampleFormat = AV_SAMPLE_FMT_FLT;
+            } else {
+                throw std::bad_cast();
+            }
+
+            result = AAudioStream_requestStart(mStream);
+            if (result != AAUDIO_OK){
+                throw std::bad_alloc();
+            }
+        }
+
+        aaudio_data_callback_result_t onAndroidAAudioDataCallback(AAudioStream *stream, void *audioData, int32_t numFrames) override {
+            return audioRender->audioStream_dataCallback(stream, audioData, numFrames);
+        }
+
+    private:
+        int outputSampleFormat;
+        int outputChannelLayout;
+        int outputChannelCount;
+        int outputSampleRate;
+        AudioRender* audioRender{nullptr};
+        AAudioStream *mStream{nullptr};
+    };
 
 
 
@@ -230,6 +363,129 @@ namespace next {
         AudioFrameBuffer frameBuffer;
         AVRational timebase;
         bool seek{false};
+    };
+
+    class AudioConverter {
+    public:
+        AudioConverter(int sourceChannelCount, int sourceChannelLayout, int sourceSampleRate, int sourceSampleFormat, int targetChannelCount, int targetChannelLayout, int targetSampleRate, int targetSampleFormat):
+        mSourceSampleRate(sourceSampleRate),
+        mTargetSampleRate(targetSampleRate),
+        mTargetFormat(targetSampleFormat),
+        mTargetChannelCount(targetChannelCount),
+        mTargetChannelLayout(targetChannelLayout) {
+
+            swr_ctx = swr_alloc();
+            /* set options */
+            av_opt_set_int(swr_ctx, "in_channel_layout", sourceChannelLayout, 0);
+//            av_opt_set_int(swr_ctx, "out_channel_layout", mSourceChannelLayout, 0);
+            av_opt_set_int(swr_ctx, "in_channel_count", sourceChannelCount, 0);
+            av_opt_set_int(swr_ctx, "out_channel_count", targetChannelCount, 0);
+            av_opt_set_int(swr_ctx, "out_channel_layout", targetChannelLayout, 0);
+            av_opt_set_int(swr_ctx, "in_sample_rate", sourceSampleRate, 0);
+            av_opt_set_int(swr_ctx, "out_sample_rate", targetSampleRate, 0);
+            av_opt_set_sample_fmt(swr_ctx, "in_sample_fmt", (enum AVSampleFormat) sourceSampleFormat, 0);
+//            if (format == AAUDIO_FORMAT_PCM_I16) {
+//                targetFormat = AV_SAMPLE_FMT_S16;
+            av_opt_set_sample_fmt(swr_ctx, "out_sample_fmt", (enum AVSampleFormat)targetSampleFormat, 0);
+//                av_opt_set_sample_fmt(swr_ctx, "out_sample_fmt", targetFormat, 0);
+
+
+            auto ret = 0;
+            /* initialize the resampling context */
+            if ((ret = (swr_init(swr_ctx))) < 0) {
+                throw std::bad_alloc();
+            }
+        }
+
+        ~AudioConverter() {
+            if (mSonicStream != nullptr) {
+                sonicDestroyStream(mSonicStream);
+                mSonicStream = nullptr;
+            }
+
+            if (swr_ctx != nullptr) {
+                swr_free(&swr_ctx);
+                swr_ctx = nullptr;
+            }
+        }
+
+        AVFrame *getAudioFrame(int size) const {
+            return alloc_audio_frame((enum AVSampleFormat)mTargetFormat, mTargetChannelLayout, mTargetChannelCount,
+                                     mTargetSampleRate, size);
+        }
+
+        void convert(AVFrame *oldFrame, LockFrameQueue &queue, AudioFrameBuffer &audioFrameBuffer,
+                     int pSpeed) {
+            int ret;
+            int dst_nb_samples;
+
+            dst_nb_samples = av_rescale_rnd(
+                    swr_get_delay(swr_ctx, mSourceSampleRate) +
+                    oldFrame->nb_samples,
+                    mTargetSampleRate, mSourceSampleRate, AV_ROUND_UP);
+//            __android_log_print(6, "AudioConverter", "resample %d, %d, %d, %d, %d, %d", sourceSampleFormat, codecContext->sample_fmt, sourceSample_rate, codecContext->sample_rate, audioFrame->nb_samples, dst_nb_samples);
+
+            auto targetSize = dst_nb_samples * 2;
+            auto frame = getAudioFrame(targetSize);
+//            FrameAutoRelease r(frame);
+            ret = av_frame_make_writable(frame);
+            if (ret < 0) {
+                throw std::bad_alloc();
+            }
+
+
+            ret = swr_convert(swr_ctx,
+                              frame->data, dst_nb_samples,
+                              (const uint8_t **) oldFrame->data, oldFrame->nb_samples);
+            if (ret < 0) {
+                throw std::bad_cast();
+            }
+
+            frame->pts = oldFrame->pts;
+            frame->nb_samples = ret;
+            frame->width = 0;
+
+            int speed = pSpeed;
+            if (mSonicStream == nullptr) {
+                mSonicStream = sonicCreateStream(mTargetSampleRate, mTargetChannelCount);
+                sonicSetQuality(mSonicStream, 1);
+            }
+            sonicSetSpeed(mSonicStream, (float)speed);
+
+//            auto targetCount = frame->nb_samples * 2;
+            if (mTargetFormat == AV_SAMPLE_FMT_S16) {
+                sonicWriteShortToStream(mSonicStream, (const short *)(frame->data[0]), frame->nb_samples);
+                ret = sonicReadShortFromStream(mSonicStream, (short *) (frame->data[0]),
+                                               targetSize);
+
+            } else if (mTargetFormat == AV_SAMPLE_FMT_FLT) {
+                sonicWriteFloatToStream(mSonicStream, (const float *)(frame->data[0]), frame->nb_samples);
+                ret = sonicReadFloatFromStream(mSonicStream, (float *) (frame->data[0]),
+                                               targetSize);
+            } else {
+                throw std::bad_cast();
+            }
+
+            if (ret > 0) {
+                frame->nb_samples = ret;
+                queue.pushFrame(frame);
+                return;
+            } else {
+                av_frame_free(&frame);
+                return;
+            }
+
+        }
+
+
+    private:
+        int mSourceSampleRate;
+        int mTargetSampleRate;
+        int mTargetFormat;
+        int mTargetChannelCount;
+        int mTargetChannelLayout;
+        struct SwrContext* swr_ctx;
+        sonicStream mSonicStream{nullptr};
     };
 
     class AudioDevice {
@@ -486,19 +742,25 @@ namespace next {
 
     AudioRender::AudioRender(next::VideoPackageQueue *pQueue, MediaClock* clock) : mThread(this), mQueueRef(pQueue),
                                                                 mFrameQueue(1024 * 8), mMediaClockRef(clock) {
-        mAudioDevice = new AudioDevice(this);
+        mAudioOutput = new AndroidAAudioOutput();
         sendMessage(MESSAGE_ID_PROCESS_PACKAGE);
     }
 
     AudioRender::~AudioRender() {
         next_log_tag("audio", "delete AudioRender %d", __LINE__);
-        delete mAudioDevice;
+        delete mAudioOutput;
     }
 
     void AudioRender::release() {
-        mAudioDevice->closeStreamSync();
+//        mAudioDevice->closeStreamSync();
 
-        mAudioDevice->clear();
+//        mAudioDevice->clear();
+        mAudioOutput->close();
+
+        if (mAudioConverter != nullptr) {
+            delete mAudioConverter;
+            mAudioConverter = nullptr;
+        }
 
         mFrameQueue.clear();
 
@@ -527,12 +789,17 @@ namespace next {
 
         frame->pts = p;
 
-        mAudioDevice->convert(frame, mFrameQueue, mDataContext->frameBuffer, speed);
+        mAudioConverter->convert(frame, mFrameQueue, mDataContext->frameBuffer, speed);
 //        newFrame->pts = p;
     }
 
     void AudioRender::stop() {
 //        mAudioDevice->closeStreamSync();
+//        mAudioOutput->close();
+//        if (mAudioConverter != nullptr) {
+//            delete mAudioConverter;
+//            mAudioConverter = nullptr;
+//        }
         mStopped.store(true);
         mThread.stop();
         mThread.join();
@@ -549,7 +816,6 @@ namespace next {
 
         mPaused.store(true);
         sendMessage(MESSAGE_ID_PAUSE);
-//        mAudioDevice->closeStreamSync();
     }
 
     void AudioRender::start() {
@@ -559,7 +825,6 @@ namespace next {
 
         mPaused.store(false);
         sendMessage(MESSAGE_ID_START);
-//        mAudioDevice->openStream();
     }
 
     bool AudioRender::isPaused() {
@@ -638,9 +903,6 @@ namespace next {
         AVRational timeBase = mQueueRef->getTimebase();
         mDataContext->timebase = timeBase;
 
-//        mAudioDevice->withSourceCodecParameter(codecParameters);
-//        mAudioDevice->open();
-
         auto decoder = avcodec_find_decoder(codecParameters->codec_id);
 
         auto dec_ctx = avcodec_alloc_context3(decoder);
@@ -659,8 +921,20 @@ namespace next {
 
     void AudioRender::onMessageInitAudioDevice() {
         auto codecParameters = mQueueRef->getCodecParameters();
-        mAudioDevice->withSourceCodecParameter(codecParameters);
-        mAudioDevice->open();
+//        mAudioDevice->withSourceCodecParameter(codecParameters);
+//        mAudioDevice->open();
+        mAudioOutput->open(this);
+
+
+
+        mAudioConverter = new AudioConverter(codecParameters->channels,
+                                             codecParameters->channel_layout,
+                                             codecParameters->sample_rate,
+                                             codecParameters->format,
+                                             mAudioOutput->getChannelCount(),
+                                             mAudioOutput->getChannelLayout(),
+                                             mAudioOutput->getSampleRate(),
+                                             mAudioOutput->getFormat());
     }
 
     void AudioRender::onMessageProcessPkt()  {
@@ -771,11 +1045,11 @@ namespace next {
     }
 
     void AudioRender::onMessagePause() {
-        mAudioDevice->pause();
+        mAudioOutput->pause();
     }
 
     void AudioRender::onMessageStart() {
-        mAudioDevice->start();
+        mAudioOutput->start();
     }
 
     void AudioRender::onThreadEnded() {

@@ -29,6 +29,11 @@ namespace next {
         void backward(int64_t duration);
         void forward(int64_t duration);
 
+        void externalAudio(std::string path);
+        void externalSubtitle(std::string path);
+
+
+
         void onSurfaceCreated();
 
         void onDrawFrame();
@@ -48,12 +53,17 @@ namespace next {
         std::string mPath;
         VideoRender* mVideoRender{nullptr};
         AudioRender* mAudioRender{nullptr};
+        AudioRender* mExternalAudioRender{nullptr};
         SubtitleRender* mSubtitleRender{nullptr};
+        SubtitleRender* mExternalSubtitleRender{nullptr};
         VideoPackageQueue mVideoPackageQueue;
         VideoPackageQueue mAudioPackageQueue;
+        VideoPackageQueue mExternalAudioPackageQueue;
         VideoPackageQueue mSubtitlePackageQueue;
+        VideoPackageQueue mExternalSubtitlePackageQueue;
         Reader mReader;
-        Reader* mExternalSubtitleReader;
+        Reader* mExternalSubtitleReader{nullptr};
+        Reader* mExternalAudioReader{nullptr};
         MediaClock mMediaClock;
 
         std::atomic_int64_t mDuration{0};

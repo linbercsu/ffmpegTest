@@ -23,6 +23,24 @@ namespace next {
     class VideoPackageQueue;
     class AudioDevice;
     class AudioDataContext;
+    class AudioConverter;
+
+    class AudioRender;
+
+    class AudioOutput {
+    public:
+        virtual ~AudioOutput() = 0;
+
+        virtual void start() = 0;
+        virtual void pause() = 0;
+        virtual void close() = 0;
+        virtual void open(AudioRender* render) = 0;
+
+        virtual int getChannelLayout() = 0;
+        virtual int getSampleRate() = 0;
+        virtual int getFormat() = 0;
+        virtual int getChannelCount() = 0;
+    };
 
     class AudioRender : public MessageCallback, MessageThreadCallback {
     public:
@@ -66,7 +84,7 @@ namespace next {
 
         MediaClock* mMediaClockRef;
         VideoPackageQueue* mQueueRef;
-        AudioDevice* mAudioDevice{nullptr};
+//        AudioDevice* mAudioDevice{nullptr};
         MessageThread mThread;
         LockFrameQueue mFrameQueue;
         struct AVFrame* currentFrame{nullptr};
@@ -75,6 +93,8 @@ namespace next {
         std::atomic_bool mPaused{false};
         AudioDataContext* mDataContext{nullptr};
         struct AVFrame* reusedAudioFrame{nullptr};
+        AudioOutput* mAudioOutput{nullptr};
+        AudioConverter* mAudioConverter{nullptr};
     };
 }
 

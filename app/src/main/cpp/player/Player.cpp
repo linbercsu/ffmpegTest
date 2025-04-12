@@ -66,6 +66,13 @@ namespace next {
         mReader.seek();
     }
 
+    void Player::externalAudio(std::string path) {
+
+    }
+    void Player::externalSubtitle(std::string path) {
+
+    }
+
     //gl thread
     void Player::onSurfaceCreated() {
         if (mVideoRender != nullptr)
