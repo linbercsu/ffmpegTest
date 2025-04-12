@@ -81,6 +81,8 @@ namespace next {
     }
 
     int VideoPackageQueue::getTopAction() {
+        std::lock_guard<std::mutex> l(mLock);
+
         if (mPktList.empty()) {
             return 0;
         }
