@@ -190,18 +190,37 @@ namespace nx_effect {
         int width = frame->width;
         int height = frame->height;
         // Update textures with new frame data
+        bool strideMode = false;
+        if (frame->width != frame->linesize[0]) {
+            strideMode = true;
+        }
+
+        if (strideMode) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[0]);
+        }
+
         glBindTexture(GL_TEXTURE_2D, converter->yTex);
         nx_effect::checkGlError("111");
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame->width, frame->height,
                         GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
         nx_effect::checkGlError("11");
+        if (strideMode) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[1]);
+        }
         glBindTexture(GL_TEXTURE_2D, converter->uTex);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame->width/2, frame->height/2,
                         GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
         nx_effect::checkGlError("12");
+        if (strideMode) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[2]);
+        }
         glBindTexture(GL_TEXTURE_2D, converter->vTex);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame->width/2, frame->height/2,
                         GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
+
+        if (strideMode) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        }
         // Bind FBO and set viewport
         nx_effect::checkGlError("13");
         glBindFramebuffer(GL_FRAMEBUFFER, converter->fbo);
