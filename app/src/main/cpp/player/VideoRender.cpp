@@ -382,8 +382,11 @@ namespace next {
         dec_ctx->pkt_timebase = timeBase;
         dec_ctx->thread_count = 16;  // specific number
         dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;  // both
-
-
+        /*
+        dec_ctx->lowres = 1;  // Half resolution
+        dec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;
+        dec_ctx->skip_loop_filter = AVDISCARD_NONREF;
+        */
         AVDictionary *opts = nullptr;
         ret = avcodec_open2(dec_ctx, decoder, &opts);
         mDataContext->decoder = decoder;
@@ -501,7 +504,7 @@ namespace next {
 
         onFrame(videoFrame, dec->pkt_timebase);
 
-        av_frame_unref(videoFrame);
+//        av_frame_unref(videoFrame);
     }
 
     void VideoRender::onMessagePreSeek() {
@@ -546,13 +549,35 @@ namespace next {
                          AV_TIME_BASE_Q);
 
 //        auto newFrame = convert(frame);
-            auto newFrame = av_frame_clone(frame);
+//            auto newFrame = av_frame_clone(frame);
+            auto newFrame = frame;
+//        reusedVideoFrame = av_frame_alloc();
 
 //        auto cp = av_frame_alloc();
 //        av_frame_copy(cp, frame);
         newFrame->pts = p;
         newFrame->pkt_duration = du;
         std::lock_guard<std::mutex> l(mFrameLock);
+        if (cachedVideoFrame != nullptr) {
+            reusedVideoFrame = cachedVideoFrame;
+            cachedVideoFrame = nullptr;
+        } else if (cached2VideoFrame != nullptr) {
+            reusedVideoFrame = cached2VideoFrame;
+            cached2VideoFrame = nullptr;
+        }
+        else {
+            reusedVideoFrame = av_frame_alloc();
+        }
+        /*
+        if (jump % 2 == 1) {
+            jump = 0;
+            av_frame_free(&newFrame);
+        } else {
+            jump += 1;
+            mFrameQueue.pushFrame(newFrame);
+        }
+         */
+
         mFrameQueue.pushFrame(newFrame);
     }
 
@@ -644,18 +669,38 @@ namespace next {
             return;
         }
 
-        av_frame_free(&mCurrentFrame);
+        if (cachedVideoFrame == nullptr) {
+            cachedVideoFrame = mCurrentFrame;
+            mCurrentFrame = nullptr;
+        } else if (cached2VideoFrame == nullptr) {
+            cached2VideoFrame = mCurrentFrame;
+            mCurrentFrame = nullptr;
+        }
+        else {
+
+            av_frame_free(&mCurrentFrame);
+        }
 
         while (true) {
             mCurrentFrame = first;
             mFrameQueue.pop();
 
-            if (first->pts < clockTime) {
+            if (first->pts < clockTime - 100000) {
                 first = mFrameQueue.first();
                 if (first == nullptr) {
                     return;
                 } else {
-                    av_frame_free(&mCurrentFrame);
+                    if (cachedVideoFrame == nullptr) {
+                        cachedVideoFrame = mCurrentFrame;
+                        mCurrentFrame = nullptr;
+                    } else if (cached2VideoFrame == nullptr) {
+                        cached2VideoFrame = mCurrentFrame;
+                        mCurrentFrame = nullptr;
+                    }
+                    else {
+
+                        av_frame_free(&mCurrentFrame);
+                    }
                 }
             } else {
                 break;

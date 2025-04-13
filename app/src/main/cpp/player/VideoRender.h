@@ -103,8 +103,11 @@ namespace next {
         int mRotation{0};
         int mBaseRotation{0};
         struct AVFrame* reusedVideoFrame{nullptr};
+        struct AVFrame* cachedVideoFrame{nullptr};
+        struct AVFrame* cached2VideoFrame{nullptr};
         DataContext* mDataContext{nullptr};
         nx_effect::YUVHelper* yuvHelper{nullptr};
+        int jump{0};
     };
 }
 
