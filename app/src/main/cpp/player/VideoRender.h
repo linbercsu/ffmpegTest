@@ -15,6 +15,7 @@
 #include "BaseEffect.h"
 #include "DirectDraw.h"
 #include "YUVHelper.h"
+#include "YUVHelper10.h"
 #include "concurrent/MessageThread.h"
 
 struct AVCodecContext;
@@ -107,6 +108,7 @@ namespace next {
         struct AVFrame* cached2VideoFrame{nullptr};
         DataContext* mDataContext{nullptr};
         nx_effect::YUVHelper* yuvHelper{nullptr};
+        nx_effect::YUVHelper10* yuvHelper10{nullptr};
         int jump{0};
     };
 }

@@ -379,6 +379,9 @@ namespace next {
 
         ret = avcodec_parameters_to_context(dec_ctx, codecParameters);
 
+        dec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+
         dec_ctx->pkt_timebase = timeBase;
         dec_ctx->thread_count = 16;  // specific number
         dec_ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;  // both
@@ -534,7 +537,8 @@ namespace next {
     }
 
     void VideoRender::onFrame(AVFrame *frame, AVRational timebase) {
-        if (frame->format != AV_PIX_FMT_YUV420P) {
+//        next_log("frame %d %d", __LINE__, AV_PIX_FMT_YUV420P10LE);
+        if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUV420P10LE) {
             throw std::bad_cast();
         }
 //        next_log_tag("format", "format: %d", frame->format);
@@ -605,6 +609,8 @@ namespace next {
 
     //gl thread
     void VideoRender::onSurfaceCreated() {
+        const char* version = (const char*)glGetString(GL_VERSION);
+        next_log("OpenGL ES version: %s %d", version, __LINE__);
 //        auto *textures = new GLuint[1]; //生成纹理id
         glGenTextures(  //创建纹理对象
                 1, //产生纹理id的数量
@@ -750,10 +756,18 @@ namespace next {
         if (yuvHelper == nullptr) {
             yuvHelper = new nx_effect::YUVHelper();
         }
-        yuvHelper->process_frame(frame);
-        auto rgbaTexture = yuvHelper->getRgbaTexture();
+        if (yuvHelper10 == nullptr) {
+            yuvHelper10 = new nx_effect::YUVHelper10();
+        }
 
-
+        GLuint rgbaTexture;
+        if (frame->format == AV_PIX_FMT_YUV420P) {
+            yuvHelper->process_frame(frame);
+            rgbaTexture = yuvHelper->getRgbaTexture();
+        } else if (frame->format == AV_PIX_FMT_YUV420P10LE) {
+            yuvHelper10->process_frame(frame);
+            rgbaTexture = yuvHelper10->getRgbaTexture();
+        }
 
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         nx_effect::checkGlError("glBindFramebuffer");

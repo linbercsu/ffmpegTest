@@ -98,6 +98,7 @@ add_library( # Sets the name of the library.
         effect/DirectDraw.cpp
         effect/MirrorEffect.cpp
         effect/YUVHelper.cpp
+        effect/YUVHelper10.cpp
         )
 
 INCLUDE_DIRECTORIES(
